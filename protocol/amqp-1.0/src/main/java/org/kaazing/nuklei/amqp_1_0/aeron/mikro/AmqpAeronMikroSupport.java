@@ -15,10 +15,7 @@ import org.kaazing.nuklei.amqp_1_0.AmqpMikroFactory;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronStaticTransportAdapter;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronTransportAdapter;
 import org.kaazing.nuklei.amqp_1_0.aeron.Message;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Close;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Frame;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Header;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Open;
+import org.kaazing.nuklei.amqp_1_0.codec.transport.*;
 import org.kaazing.nuklei.amqp_1_0.connection.Connection;
 import org.kaazing.nuklei.amqp_1_0.connection.ConnectionFactory;
 import org.kaazing.nuklei.amqp_1_0.connection.ConnectionHandler;
@@ -37,9 +34,11 @@ import org.kaazing.nuklei.amqp_1_0.session.SessionFactory;
 import org.kaazing.nuklei.amqp_1_0.session.SessionHandler;
 import org.kaazing.nuklei.amqp_1_0.session.SessionHooks;
 import org.kaazing.nuklei.amqp_1_0.session.SessionStateMachine;
+import org.kaazing.nuklei.function.DirectBufferAccessor;
 import org.kaazing.nuklei.function.Mikro;
 import org.kaazing.nuklei.function.MutableDirectBufferMutator;
 
+import uk.co.real_logic.agrona.DirectBuffer;
 import uk.co.real_logic.agrona.MutableDirectBuffer;
 import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 
@@ -104,6 +103,7 @@ public class AmqpAeronMikroSupport
 
     private class AmqpTestLink extends Link<AmqpTestLink>
     {
+        String producerName;
         public AmqpTestLink(Session<AmqpTestSession, AmqpTestLink> owner,
                             LinkStateMachine<AmqpTestLink> stateMachine)
         {
@@ -143,7 +143,57 @@ public class AmqpAeronMikroSupport
         public Link<AmqpTestLink> newLink(Session<AmqpTestSession, AmqpTestLink> session)
         {
             return new AmqpTestLink(session, new LinkStateMachine<AmqpTestLink>(
-                    new LinkHooks<AmqpTestLink>()));
+                    new AmqpAeronLinkHooks()));
+                    //new LinkHooks<AmqpTestLink>()));
+        }
+    }
+
+    private static class AmqpAeronLinkHooks extends LinkHooks<AmqpTestLink>
+    {
+        public AmqpAeronLinkHooks()
+        {
+            whenAttachReceived = AmqpAeronLinkHooks::whenAttachReceived;
+        }
+
+        private static void whenAttachReceived(Link<AmqpTestLink> link, Frame frame, Attach attach)
+        {
+            AmqpTestLink parameter = link.parameter;
+            //parameter.producer = parameter.session.createProducer(null);
+
+            //TODO(JAF): Fix this code to get the correct link name
+            Sender sender = link.sender;
+            parameter.producerName = attach.getName(new DirectBufferAccessor<String>()
+            {
+                @Override
+                public String access(DirectBuffer buffer, int offset, int size)
+                {
+                    return buffer.getStringUtf8(offset, size);
+                }
+            });
+
+
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(0)
+                    .setPerformative(OPEN);
+
+            attach.wrap(frame.buffer(), frame.bodyOffset(), false)
+                    .maxLength(255)
+                    .clear();
+
+            /* Old example
+            sender.wrap(frame)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(0)
+                    .setPerformative(OPEN);
+            attach.wrap(frame.buffer(), frame.bodyOffset(), false)
+                    .maxLength(255)
+                    .clear();
+            */
+            frame.bodyChanged();
+            sender.send(frame.limit());
         }
     }
 

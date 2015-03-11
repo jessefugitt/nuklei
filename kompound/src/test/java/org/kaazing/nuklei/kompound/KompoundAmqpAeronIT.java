@@ -133,4 +133,34 @@ public class KompoundAmqpAeronIT
             Thread.sleep(10);
         }
     }
+
+    @Test
+    public void shouldRunAMQPServer() throws Exception
+    {
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
+        Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
+
+        final Kompound.Builder builder = new Kompound.Builder()
+                .service(
+                        URI,
+                        (header, typeId, buffer, offset, length) ->
+                        {
+                            switch (typeId)
+                            {
+                                case TcpManagerTypeId.ATTACH_COMPLETED:
+                                    attached.lazySet(true);
+                                    break;
+                                case TcpManagerTypeId.NEW_CONNECTION:
+                                case TcpManagerTypeId.RECEIVED_DATA:
+                                case TcpManagerTypeId.EOF:
+                                    mikro.onMessage(header, typeId, buffer, offset, length);
+                                    break;
+                            }
+                        });
+
+        kompound = Kompound.startUp(builder);
+        waitToBeAttached();
+
+        Thread.sleep(120000);
+    }
 }
