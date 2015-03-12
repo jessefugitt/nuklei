@@ -167,7 +167,9 @@ public class AmqpAeronMikroSupport
                 @Override
                 public String access(DirectBuffer buffer, int offset, int size)
                 {
-                    return buffer.getStringUtf8(offset, size);
+                    byte[] bytes = new byte[size];
+                    buffer.getBytes(offset, bytes);
+                    return new String(bytes);
                 }
             });
 
