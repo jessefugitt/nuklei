@@ -103,7 +103,7 @@ public class AmqpAeronMikroSupport
 
     private class AmqpTestLink extends Link<AmqpTestLink>
     {
-        String producerName;
+        String attachLinkName;
         public AmqpTestLink(Session<AmqpTestSession, AmqpTestLink> owner,
                             LinkStateMachine<AmqpTestLink> stateMachine)
         {
@@ -162,7 +162,7 @@ public class AmqpAeronMikroSupport
 
             //TODO(JAF): Fix this code to get the correct link name
             Sender sender = link.sender;
-            parameter.producerName = attach.getName(new DirectBufferAccessor<String>()
+            parameter.attachLinkName = attach.getName(new DirectBufferAccessor<String>()
             {
                 @Override
                 public String access(DirectBuffer buffer, int offset, int size)
