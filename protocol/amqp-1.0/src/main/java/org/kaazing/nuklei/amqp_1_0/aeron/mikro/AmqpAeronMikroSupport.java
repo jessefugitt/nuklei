@@ -8,7 +8,10 @@ import static org.kaazing.nuklei.amqp_1_0.codec.transport.Header.AMQP_PROTOCOL;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 import org.kaazing.nuklei.amqp_1_0.AmqpMikroFactory;
@@ -56,133 +59,218 @@ public class AmqpAeronMikroSupport
     };
 
     private final AeronTransportAdapter aeronTransportAdapter = new AeronStaticTransportAdapter(aeronMessageHandler);
+    private final Map<String, AmqpProducer> amqpProducerMap = new HashMap<String, AmqpProducer>();
+    private final Map<String, AmqpConsumer> amqpConsumerMap = new HashMap<String, AmqpConsumer>();
 
     public AmqpAeronMikroSupport()
     {
+        //TODO(JAF): This should probably only be started once
+        aeronTransportAdapter.start();
+    }
+
+    public void close()
+    {
+        aeronTransportAdapter.stop();
     }
 
     public Mikro createAmqpAeronMikro()
     {
         final SenderFactory senderFactory = new TcpSenderFactory(new UnsafeBuffer(ByteBuffer.allocate(SEND_BUFFER_SIZE)));
-        final ConnectionFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connectionFactory =
-                new AmqpTestConnectionFactory();
-        final ConnectionHandler<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connectionHandler =
-                new ConnectionHandler<AmqpTestConnection, AmqpTestSession, AmqpTestLink>(
-                        new AmqpTestSessionFactory(),
-                        new SessionHandler<AmqpTestSession, AmqpTestLink>(
-                                new AmqpTestLinkFactory(),
-                                new LinkHandler<AmqpTestLink>()));
+        final ConnectionFactory<AmqpConnection, AmqpSession, AmqpLink> connectionFactory =
+                new AmqpConnectionFactory();
+        final ConnectionHandler<AmqpConnection, AmqpSession, AmqpLink> connectionHandler =
+                new ConnectionHandler<AmqpConnection, AmqpSession, AmqpLink>(
+                        new AmqpSessionFactory(),
+                        new SessionHandler<AmqpSession, AmqpLink>(
+                                new AmqpLinkFactory(amqpProducerMap, amqpConsumerMap, aeronTransportAdapter),
+                                new LinkHandler<AmqpLink>()));
 
-        AmqpMikroFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink> factory =
-                new AmqpMikroFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink>();
+        AmqpMikroFactory<AmqpConnection, AmqpSession, AmqpLink> factory =
+                new AmqpMikroFactory<AmqpConnection, AmqpSession, AmqpLink>();
         return factory.newMikro(senderFactory, connectionFactory, connectionHandler);
     }
 
-    private class AmqpTestConnection extends Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink>
+    private class AmqpConnection extends Connection<AmqpConnection, AmqpSession, AmqpLink>
     {
         // TODO: the JmsConnection stored a javax.jms.Connection object representing the connection to the
         //       broker, is something similar needed here for the connection to the Aeron bus?
-        public AmqpTestConnection(ConnectionFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connectionFactory,
-                                  ConnectionStateMachine<AmqpTestConnection, AmqpTestSession, AmqpTestLink> stateMachine,
-                                  Sender sender, MutableDirectBuffer reassemblyBuffer)
+        public AmqpConnection(ConnectionFactory<AmqpConnection, AmqpSession, AmqpLink> connectionFactory,
+                              ConnectionStateMachine<AmqpConnection, AmqpSession, AmqpLink> stateMachine,
+                              Sender sender, MutableDirectBuffer reassemblyBuffer)
         {
             super(stateMachine, sender, reassemblyBuffer);
             this.parameter = this;
         }
     }
 
-    private class AmqpTestSession extends Session<AmqpTestSession, AmqpTestLink>
+    private class AmqpSession extends Session<AmqpSession, AmqpLink>
     {
-        AmqpTestSession(Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> owner,
-                SessionStateMachine<AmqpTestSession, AmqpTestLink> stateMachine)
+        AmqpSession(Connection<AmqpConnection, AmqpSession, AmqpLink> owner,
+                    SessionStateMachine<AmqpSession, AmqpLink> stateMachine)
         {
             super(stateMachine, owner.sender);
             this.parameter = this;
         }
     }
 
-    private class AmqpTestLink extends Link<AmqpTestLink>
+    private class AmqpLink extends Link<AmqpLink>
     {
-        String attachLinkName;
-        public AmqpTestLink(Session<AmqpTestSession, AmqpTestLink> owner,
-                            LinkStateMachine<AmqpTestLink> stateMachine)
+        protected String attachLinkName;
+        protected Map<String, AmqpProducer> producerMap;
+        protected Map<String, AmqpConsumer> consumerMap;
+        protected AeronTransportAdapter aeronTransportAdapter;
+        public AmqpLink(Session<AmqpSession, AmqpLink> owner,
+                        LinkStateMachine<AmqpLink> stateMachine,
+                        Map<String, AmqpProducer> producerMap,
+                        Map<String, AmqpConsumer> consumerMap, AeronTransportAdapter aeronTransportAdapter)
         {
             super(stateMachine, owner.sender);
             this.parameter = this;
+            this.producerMap = producerMap;
+            this.consumerMap = consumerMap;
+            this.aeronTransportAdapter = aeronTransportAdapter;
         }
     }
 
-    private class AmqpTestConnectionFactory implements ConnectionFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink>
+    private class AmqpConnectionFactory implements ConnectionFactory<AmqpConnection, AmqpSession, AmqpLink>
     {
         @Override
-        public Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> newConnection(Sender sender,
+        public Connection<AmqpConnection, AmqpSession, AmqpLink> newConnection(Sender sender,
                                                                                            MutableDirectBuffer reassemblyBuffer)
         {
-            ConnectionStateMachine<AmqpTestConnection, AmqpTestSession, AmqpTestLink> stateMachine =
-                    new ConnectionStateMachine<AmqpTestConnection, AmqpTestSession, AmqpTestLink>(
-                            new AmqpTestConnectionHooks());
-            return new AmqpTestConnection(this, stateMachine, sender, reassemblyBuffer);
+            ConnectionStateMachine<AmqpConnection, AmqpSession, AmqpLink> stateMachine =
+                    new ConnectionStateMachine<AmqpConnection, AmqpSession, AmqpLink>(
+                            new AmqpConnectionHooks());
+            return new AmqpConnection(this, stateMachine, sender, reassemblyBuffer);
         }
     }
 
-    private class AmqpTestSessionFactory implements SessionFactory<AmqpTestConnection, AmqpTestSession, AmqpTestLink>
+    private class AmqpSessionFactory implements SessionFactory<AmqpConnection, AmqpSession, AmqpLink>
     {
         @Override
-        public Session<AmqpTestSession, AmqpTestLink> newSession(
-                Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connection)
+        public Session<AmqpSession, AmqpLink> newSession(
+                Connection<AmqpConnection, AmqpSession, AmqpLink> connection)
         {
-            return new AmqpTestSession(connection,
-                    new SessionStateMachine<AmqpTestSession, AmqpTestLink>(
-                            new SessionHooks<AmqpTestSession, AmqpTestLink>()));
+            return new AmqpSession(connection,
+                    new SessionStateMachine<AmqpSession, AmqpLink>(
+                            new SessionHooks<AmqpSession, AmqpLink>()));
         }
     }
 
-    private class AmqpTestLinkFactory implements LinkFactory<AmqpTestSession, AmqpTestLink>
+    private class AmqpLinkFactory implements LinkFactory<AmqpSession, AmqpLink>
     {
-        @Override
-        public Link<AmqpTestLink> newLink(Session<AmqpTestSession, AmqpTestLink> session)
+        private final Map<String, AmqpProducer> localProducerMap;
+        private final Map<String, AmqpConsumer> localConsumerMap;
+        private final AeronTransportAdapter aeronTransportAdapter;
+
+        public AmqpLinkFactory(Map<String, AmqpProducer> localProducerMap, Map<String, AmqpConsumer> localConsumerMap,
+                               AeronTransportAdapter aeronTransportAdapter)
         {
-            return new AmqpTestLink(session, new LinkStateMachine<AmqpTestLink>(
-                    new AmqpAeronLinkHooks()));
+            this.localProducerMap = localProducerMap;
+            this.localConsumerMap = localConsumerMap;
+            this.aeronTransportAdapter = aeronTransportAdapter;
+        }
+
+        @Override
+        public Link<AmqpLink> newLink(Session<AmqpSession, AmqpLink> session)
+        {
+            return new AmqpLink(session, new LinkStateMachine<AmqpLink>(
+                    new AmqpAeronLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter);
                     //new LinkHooks<AmqpTestLink>()));
         }
     }
 
-    private static class AmqpAeronLinkHooks extends LinkHooks<AmqpTestLink>
+    private static class AmqpAeronLinkHooks extends LinkHooks<AmqpLink>
     {
+        private static final DirectBufferAccessor<String> READ_UTF_8 = newAccessor(UTF_8);
+
         public AmqpAeronLinkHooks()
         {
             whenAttachReceived = AmqpAeronLinkHooks::whenAttachReceived;
         }
 
-        private static void whenAttachReceived(Link<AmqpTestLink> link, Frame frame, Attach attach)
+        private static void whenAttachReceived(Link<AmqpLink> link, Frame frame, Attach attach)
         {
-            AmqpTestLink parameter = link.parameter;
+            AmqpLink parameter = link.parameter;
             //parameter.producer = parameter.session.createProducer(null);
+            //parameter.attachLinkName = attach.getName(READ_UTF_8);
+            //System.out.println("Attach received with name: " + parameter.attachLinkName);
 
-            //TODO(JAF): Fix this code to get the correct link name
-            Sender sender = link.sender;
-            parameter.attachLinkName = attach.getName(new DirectBufferAccessor<String>()
+            //String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
+            //System.out.println("Attach received with source address: " + sourceAddress);
+
+            //String targetAddress = attach.getTarget().getAddress(READ_UTF_8);
+            //System.out.println("Attach received with target address: " + targetAddress);
+
+            parameter.attachLinkName = attach.getName(READ_UTF_8);
+            System.out.println("Attach received with name: " + parameter.attachLinkName);
+
+            //TODO(JAF): Figure out how to determine if this is a producer or consumer
+            if(parameter.attachLinkName.indexOf("->") != -1)
             {
-                @Override
-                public String access(DirectBuffer buffer, int offset, int size)
+                AmqpConsumer localConsumer = new AmqpConsumer(parameter.attachLinkName);
+                parameter.consumerMap.put(localConsumer.topicName, localConsumer);
+                parameter.aeronTransportAdapter.onRemoteConsumerDetected(localConsumer.topicName);
+
+            }
+            else if(parameter.attachLinkName.indexOf("<-") != -1)
+            {
+                AmqpProducer localProducer = new AmqpProducer(parameter.attachLinkName);
+                parameter.producerMap.put(localProducer.topicName, localProducer);
+                parameter.aeronTransportAdapter.onRemoteProducerDetected(localProducer.topicName);
+
+                //TODO(JAF): Remove the code that sends a fake message to ensure it is working
+                /*
+                final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
+                final String text = "Hello World!";
+                byte[] bytes = text.getBytes();
+                buffer.putBytes(0, text.getBytes());
+                final int offset = 0;
+                final int length = bytes.length;
+                Message testMessage = new Message()
                 {
-                    byte[] bytes = new byte[size];
-                    buffer.getBytes(offset, bytes);
-                    return new String(bytes);
-                }
-            });
+                    @Override
+                    public DirectBuffer getBuffer()
+                    {
+                        return buffer;
+                    }
 
+                    @Override
+                    public int getOffset()
+                    {
+                        return offset;
+                    }
 
+                    @Override
+                    public int getLength()
+                    {
+                        return length;
+                    }
+                };
+
+                //final boolean result = publication.offer(buffer, 0, message.getBytes().length);
+                System.out.println("Sending initial message to aeron transport adapter on topic: " + localProducer.topicName);
+                parameter.aeronTransportAdapter.onRemoteMessageReceived(localProducer.topicName, testMessage);
+                */
+            }
+
+            Sender sender = link.sender;
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
                     .setChannel(0)
                     .setPerformative(OPEN);
 
-            attach.wrap(frame.buffer(), frame.bodyOffset(), false)
+            attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                     .maxLength(255)
                     .clear();
+            frame.bodyChanged();
+            sender.send(frame.limit());
+
+            //TODO: This isn't working to send OPEN back to the sender
+
+
+
 
             /* Old example
             sender.wrap(frame)
@@ -194,21 +282,45 @@ public class AmqpAeronMikroSupport
                     .maxLength(255)
                     .clear();
             */
-            frame.bodyChanged();
-            sender.send(frame.limit());
+            //connection.send(frame, open);
+
+            //frame.bodyChanged();
+            //sender.send(frame.limit());
         }
     }
 
-    private static class AmqpTestConnectionHooks extends ConnectionHooks<AmqpTestConnection, AmqpTestSession, AmqpTestLink>
+    private static class AmqpProducer
     {
-        public AmqpTestConnectionHooks()
+        private final String linkName;
+        private final String topicName;
+        public AmqpProducer(String linkName)
         {
-            whenHeaderReceived = AmqpTestConnectionHooks::whenHeaderReceived;
-            whenOpenReceived = AmqpTestConnectionHooks::whenOpenReceived;
-            whenCloseReceived = AmqpTestConnectionHooks::whenCloseReceived;
+            this.linkName = linkName;
+            this.topicName = linkName.split("<-")[0];
+        }
+    }
+
+    private static class AmqpConsumer
+    {
+        private final String linkName;
+        private final String topicName;
+        public AmqpConsumer(String linkName)
+        {
+            this.linkName = linkName;
+            this.topicName = linkName.split("->")[0];
+        }
+    }
+
+    private static class AmqpConnectionHooks extends ConnectionHooks<AmqpConnection, AmqpSession, AmqpLink>
+    {
+        public AmqpConnectionHooks()
+        {
+            whenHeaderReceived = AmqpConnectionHooks::whenHeaderReceived;
+            whenOpenReceived = AmqpConnectionHooks::whenOpenReceived;
+            whenCloseReceived = AmqpConnectionHooks::whenCloseReceived;
         }
 
-        private static void whenHeaderReceived(Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connection,
+        private static void whenHeaderReceived(Connection<AmqpConnection, AmqpSession, AmqpLink> connection,
                                         Header header)
         {
             Sender sender = connection.sender;
@@ -222,7 +334,7 @@ public class AmqpAeronMikroSupport
             connection.send(header);
         }
 
-        private static void whenOpenReceived(Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connection,
+        private static void whenOpenReceived(Connection<AmqpConnection, AmqpSession, AmqpLink> connection,
                                       Frame frame,
                                       Open open)
         {
@@ -246,7 +358,7 @@ public class AmqpAeronMikroSupport
             connection.send(frame, open);
         }
 
-        private static void whenCloseReceived(Connection<AmqpTestConnection, AmqpTestSession, AmqpTestLink> connection,
+        private static void whenCloseReceived(Connection<AmqpConnection, AmqpSession, AmqpLink> connection,
                                               Frame frame,
                                               Close close)
         {
@@ -290,6 +402,31 @@ public class AmqpAeronMikroSupport
                 return out.position() - offset;
             }
 
+        };
+    }
+
+    private static final DirectBufferAccessor<String> READ_UTF_8 = newAccessor(UTF_8);
+
+    public static final DirectBufferAccessor<String> newAccessor(final Charset charset)
+    {
+        return new DirectBufferAccessor<String>()
+        {
+            private final CharsetDecoder decoder = charset.newDecoder();
+
+            @Override
+            public String access(DirectBuffer buffer, int offset, int size)
+            {
+                ByteBuffer buf = buffer.byteBuffer();
+                ByteBuffer in = buf != null ? buf.duplicate() : ByteBuffer.wrap(buffer.byteArray());
+                in.position(offset);
+                in.limit(offset + size);
+                CharBuffer out = CharBuffer.allocate(size);
+                decoder.reset();
+                decoder.decode(in, out, true);
+                decoder.flush(out);
+                out.flip();
+                return out.toString();
+            }
         };
     }
 }

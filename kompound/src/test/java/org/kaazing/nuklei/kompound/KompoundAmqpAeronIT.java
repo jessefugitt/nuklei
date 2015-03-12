@@ -22,6 +22,7 @@ import static org.junit.rules.RuleChain.outerRule;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -41,7 +42,7 @@ public class KompoundAmqpAeronIT
 
     private final K3poRule k3po = new K3poRule().setScriptRoot("org/kaazing/k3po/scripts/nuklei/kompound");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(1, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(120, SECONDS));
 
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout);
@@ -135,7 +136,8 @@ public class KompoundAmqpAeronIT
     }
 
     @Test
-    public void shouldRunAMQPServer() throws Exception
+    @Ignore
+    public void shouldRunAMQPServerFor2Min() throws Exception
     {
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();

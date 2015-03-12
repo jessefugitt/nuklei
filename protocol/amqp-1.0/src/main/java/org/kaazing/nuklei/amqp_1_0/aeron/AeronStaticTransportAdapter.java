@@ -3,7 +3,6 @@ package org.kaazing.nuklei.amqp_1_0.aeron;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -24,20 +23,33 @@ import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
 import uk.co.real_logic.agrona.DirectBuffer;
 //import uk.co.real_logic.aeron.driver.MediaDriver;
-import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 
 /**
  *
  */
 public class AeronStaticTransportAdapter implements AeronTransportAdapter
 {
-    public static final boolean PROXY_CREATION_AT_STARTUP = AeronAdapterConfiguration.PROXY_CREATION_AT_STARTUP;
-
+    private static final boolean PROXY_CREATION_AT_STARTUP = AeronAdapterConfiguration.PROXY_CREATION_AT_STARTUP;
     private static final int FRAGMENT_COUNT_LIMIT = AeronAdapterConfiguration.FRAGMENT_COUNT_LIMIT;
-    private static final long LINGER_TIMEOUT_MS = AeronAdapterConfiguration.LINGER_TIMEOUT_MS;
-
     private static final boolean EMBEDDED_MEDIA_DRIVER = AeronAdapterConfiguration.EMBEDDED_MEDIA_DRIVER;
-    private static final UnsafeBuffer BUFFER = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
+
+    private final ThreadLocal<AeronMessage> tlAeronMessage = new ThreadLocal<AeronMessage>()
+    {
+        @Override
+        protected AeronMessage initialValue()
+        {
+            return new AeronMessage();
+        }
+    };
+    static
+    {
+        //TODO(JAF): If we add a dependency on aeron-driver then we can start the media driver in embedded mode
+        //final MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launch() : null;
+        if(EMBEDDED_MEDIA_DRIVER)
+        {
+            //MediaDriver.launch();
+        }
+    }
 
     protected AeronWrapper aeronWrapper;
     protected final AeronLogicalNameMapping logicalNameMapping = new AeronLogicalNameMapping();
@@ -139,7 +151,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
 
     protected void addProxyPublication(String logicalName, AeronPhysicalStream physicalStream)
     {
-        Publication publication = aeronWrapper.addPublication(physicalStream.getChannel(), physicalStream.getStream());
+        Publication publication = aeronWrapper.addPublication(physicalStream.getChannel(), physicalStream.getStreamId());
         proxyPublicationMap.put(physicalStream, publication);
     }
 
@@ -150,16 +162,21 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
             @Override
             public void onData(DirectBuffer buffer, int offset, int length, Header header)
             {
-                //TODO(JAF): Don't create a new object here
-                AeronMessage message = new AeronMessage(buffer, offset, length, header);
+                //TODO(JAF): Don't create a new object here but maybe there is a better way than thread local
+                AeronMessage message = tlAeronMessage.get();
+                message.setBuffer(buffer);
+                message.setOffset(offset);
+                message.setLength(length);
+                message.setHeader(header);
+
                 System.out.println("Received message on: " + physicalStream.getChannel() + " " +
-                        physicalStream.getStream() + " forwarding to topic: " + logicalName);
+                        physicalStream.getStreamId() + " forwarding to topic: " + logicalName);
                 onLocalMessageReceived(logicalName, physicalStream, message);
             }
         };
-        System.out.println("Subscribing to: " + physicalStream.getChannel() + " " + physicalStream.getStream());
+        System.out.println("Subscribing to: " + physicalStream.getChannel() + " " + physicalStream.getStreamId());
         Subscription subscription = aeronWrapper.addSubscription(
-                physicalStream.getChannel(), physicalStream.getStream(), dataHandler);
+                physicalStream.getChannel(), physicalStream.getStreamId(), dataHandler);
         proxySubscriptionsMap.put(physicalStream, subscription);
     }
 
@@ -386,13 +403,13 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         {
             this.aeron = aeron;
         }
-        public Subscription addSubscription(String channel, int stream, DataHandler dataHandler)
+        public Subscription addSubscription(String channel, int streamId, DataHandler dataHandler)
         {
-            return aeron.addSubscription(channel, stream, dataHandler);
+            return aeron.addSubscription(channel, streamId, dataHandler);
         }
-        public Publication addPublication(String channel, int stream)
+        public Publication addPublication(String channel, int streamId)
         {
-            return aeron.addPublication(channel, stream);
+            return aeron.addPublication(channel, streamId);
         }
         public void close()
         {

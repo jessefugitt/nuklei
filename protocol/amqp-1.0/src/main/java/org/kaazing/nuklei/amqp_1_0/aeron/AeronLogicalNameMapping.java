@@ -11,7 +11,7 @@ import java.util.Map;
  * "channel,stream = logical name"
  *
  */
-public class AeronLogicalNameMapping implements AeronMapping
+public class AeronLogicalNameMapping
 {
     private final Map<String, List<AeronPhysicalStream>> logicalToSubscriptionsMap = new HashMap<>();
     private final Map<String, List<AeronPhysicalStream>> logicalToPublicationsMap = new HashMap<>();
@@ -20,19 +20,16 @@ public class AeronLogicalNameMapping implements AeronMapping
     {
     }
 
-    @Override
     public Map<String, List<AeronPhysicalStream>> getLogicalNameToSubscriptionsMap()
     {
         return logicalToSubscriptionsMap;
     }
 
-    @Override
     public Map<String, List<AeronPhysicalStream>> getLogicalNameToPublicationsMap()
     {
         return logicalToPublicationsMap;
     }
 
-    @Override
     public void loadPublication(String logicalName, AeronPhysicalStream physicalStream)
     {
         List<AeronPhysicalStream> publications = logicalToPublicationsMap.get(logicalName);
@@ -51,7 +48,6 @@ public class AeronLogicalNameMapping implements AeronMapping
         }
     }
 
-    @Override
     public void loadSubscription(String logicalName, AeronPhysicalStream physicalStream)
     {
         List<AeronPhysicalStream> subscriptions = logicalToSubscriptionsMap.get(logicalName);
@@ -70,13 +66,11 @@ public class AeronLogicalNameMapping implements AeronMapping
         }
     }
 
-    @Override
     public List<AeronPhysicalStream> getPublications(String logicalName)
     {
         return logicalToPublicationsMap.get(logicalName);
     }
 
-    @Override
     public List<AeronPhysicalStream> getSubscriptions(String logicalName)
     {
         return logicalToSubscriptionsMap.get(logicalName);

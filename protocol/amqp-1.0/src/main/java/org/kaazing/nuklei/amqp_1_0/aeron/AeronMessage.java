@@ -13,18 +13,15 @@ public class AeronMessage implements Message
     private int length;
     private Header header;
 
-    public AeronMessage(DirectBuffer buffer, int offset, int length, Header header)
-    {
-        this.buffer = buffer;
-        this.offset = offset;
-        this.length = length;
-        this.header = header;
-    }
-
     @Override
     public DirectBuffer getBuffer()
     {
         return buffer;
+    }
+
+    public void setBuffer(DirectBuffer buffer)
+    {
+        this.buffer = buffer;
     }
 
     @Override
@@ -33,9 +30,29 @@ public class AeronMessage implements Message
         return offset;
     }
 
+    public void setOffset(int offset)
+    {
+        this.offset = offset;
+    }
+
     @Override
     public int getLength()
     {
         return length;
+    }
+
+    public void setLength(int length)
+    {
+        this.length = length;
+    }
+
+    public Header getHeader()
+    {
+        return header;
+    }
+
+    public void setHeader(Header header)
+    {
+        this.header = header;
     }
 }
