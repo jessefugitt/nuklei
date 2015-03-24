@@ -110,24 +110,6 @@ public class KompoundAmqpIT
 
     private Kompound kompound;
 
-    public static final ThreadLocal<Frame> FRAME_LOCAL_REF = new ThreadLocal<Frame>()
-    {
-        @Override
-        protected Frame initialValue()
-        {
-            return new Frame();
-        }
-    };
-
-    public static final ThreadLocal<Open> OPEN_LOCAL_REF = new ThreadLocal<Open>()
-    {
-        @Override
-        protected Open initialValue()
-        {
-            return new Open();
-        }
-    };
-
     @After
     public void cleanUp() throws Exception
     {
@@ -371,13 +353,11 @@ public class KompoundAmqpIT
 //            parameter.connection = parameter.connectionFactory.createConnection();
 
             Sender sender = connection.sender;
-            frame = FRAME_LOCAL_REF.get();
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                 .setDataOffset(2)
                 .setType(0)
                 .setChannel(0)
                 .setPerformative(OPEN);
-            open = OPEN_LOCAL_REF.get();
             open.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                 .maxLength(255)
                 .setContainerId(WRITE_UTF_8, "")
@@ -499,7 +479,7 @@ public class KompoundAmqpIT
                   .maxLength(255)
                   .setAddress(WRITE_UTF_8, "29d3bfd4-6938-11e4-b116-123b93f75cba");
             frame.bodyChanged();
-            sender.send(frame.limit());
+            link.send(frame, attach);
         }
 
         private static void whenDetachReceived(Link<AmqpTestLink> link, Frame frame, Detach detach)
@@ -515,7 +495,7 @@ public class KompoundAmqpIT
                   .setHandle(0)
                   .setClosed(true);
             frame.bodyChanged();
-            sender.send(frame.limit());
+            link.send(frame, detach);
         }
 
         private static void whenTransferReceived(Link<AmqpTestLink> link, Frame frame, Transfer transfer)
@@ -535,7 +515,7 @@ public class KompoundAmqpIT
                        .setLast(0)
                        .setSettled(true);
             frame.bodyChanged();
-            sender.send(frame.limit());
+            link.send(frame, disposition);
 
             // send transfer to other attached session
             Message message = transfer.getMessage();
@@ -545,8 +525,6 @@ public class KompoundAmqpIT
 
             // find the target session, get sendBuffer for said session, new Transfer frame to that session with
             // just decoded Message body
-            sender = receiverLink.sender;
-
             sendFrame.wrap(sender.getBuffer(), sender.getOffset(), true)
                      .setDataOffset(2)
                      .setType(0)
@@ -562,7 +540,7 @@ public class KompoundAmqpIT
                         .setDescriptor(0x77L)
                         .setValue(WRITE_UTF_8, messageString);
             sendFrame.setLength(sendTransfer.limit() - sendFrame.offset());
-            sender.send(sendFrame.limit());
+            receiverLink.send(sendFrame, sendTransfer);
         }
     }
 
