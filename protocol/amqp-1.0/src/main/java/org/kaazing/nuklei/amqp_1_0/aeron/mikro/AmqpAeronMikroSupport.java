@@ -2,7 +2,9 @@ package org.kaazing.nuklei.amqp_1_0.aeron.mikro;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.CLOSE;
+import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.BEGIN;
 import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.OPEN;
+import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.ATTACH;
 import static org.kaazing.nuklei.amqp_1_0.codec.transport.Header.AMQP_PROTOCOL;
 
 import java.nio.ByteBuffer;
@@ -18,6 +20,7 @@ import org.kaazing.nuklei.amqp_1_0.AmqpMikroFactory;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronStaticTransportAdapter;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronTransportAdapter;
 import org.kaazing.nuklei.amqp_1_0.aeron.Message;
+import org.kaazing.nuklei.amqp_1_0.codec.messaging.*;
 import org.kaazing.nuklei.amqp_1_0.codec.transport.*;
 import org.kaazing.nuklei.amqp_1_0.connection.Connection;
 import org.kaazing.nuklei.amqp_1_0.connection.ConnectionFactory;
@@ -153,7 +156,7 @@ public class AmqpAeronMikroSupport
         {
             return new AmqpSession(connection,
                     new SessionStateMachine<AmqpSession, AmqpLink>(
-                            new SessionHooks<AmqpSession, AmqpLink>()));
+                            new AmqpSessionHooks()));
         }
     }
 
@@ -196,6 +199,23 @@ public class AmqpAeronMikroSupport
             //parameter.attachLinkName = attach.getName(READ_UTF_8);
             //System.out.println("Attach received with name: " + parameter.attachLinkName);
 
+            //String name = attach.getName(READ_UTF_8);
+            //long handle = attach.getHandle();
+            //Role role = attach.getRole();
+            //SenderSettleMode senderSettleMode = attach.getSendSettleMode();
+            //ReceiverSettleMode receiverSettleMode = attach.getReceiveSettleMode();
+            //Attach.TerminusDescriptor descriptor = attach.getSourceTerminusDescriptor();
+            Source source = attach.getSource();
+            String sourceAddress = source.getAddress(READ_UTF_8);
+            TerminusDurability durability = source.getDurable();
+            TerminusExpiryPolicy expiryPolicy = source.getExpiryPolicy();
+            long timeout = source.getTimeout();
+
+            Target target = attach.getTarget();
+            String targetAddress = target.getAddress(READ_UTF_8);
+
+
+
             //String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
             //System.out.println("Attach received with source address: " + sourceAddress);
 
@@ -220,7 +240,7 @@ public class AmqpAeronMikroSupport
                 parameter.aeronTransportAdapter.onRemoteProducerDetected(localProducer.topicName);
 
                 //TODO(JAF): Remove the code that sends a fake message to ensure it is working
-                /*
+
                 final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
                 final String text = "Hello World!";
                 byte[] bytes = text.getBytes();
@@ -251,7 +271,7 @@ public class AmqpAeronMikroSupport
                 //final boolean result = publication.offer(buffer, 0, message.getBytes().length);
                 System.out.println("Sending initial message to aeron transport adapter on topic: " + localProducer.topicName);
                 parameter.aeronTransportAdapter.onRemoteMessageReceived(localProducer.topicName, testMessage);
-                */
+
             }
 
             Sender sender = link.sender;
@@ -259,7 +279,7 @@ public class AmqpAeronMikroSupport
                     .setDataOffset(2)
                     .setType(0)
                     .setChannel(0)
-                    .setPerformative(OPEN);
+                    .setPerformative(ATTACH);
 
             attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                     .maxLength(255)
@@ -267,7 +287,7 @@ public class AmqpAeronMikroSupport
             frame.bodyChanged();
             sender.send(frame.limit());
 
-            //TODO: This isn't working to send OPEN back to the sender
+            //TODO: This isn't working to send ATTACH back to the sender
 
 
 
@@ -377,6 +397,54 @@ public class AmqpAeronMikroSupport
                  .clear();
             frame.bodyChanged();
             connection.send(frame, close);
+        }
+    }
+
+    private static class AmqpSessionHooks extends SessionHooks<AmqpSession, AmqpLink>
+    {
+        public AmqpSessionHooks()
+        {
+            whenBeginReceived = AmqpSessionHooks::whenBeginReceived;
+        }
+
+        private static void whenBeginReceived(Session<AmqpSession, AmqpLink> session, Frame frame, Begin begin)
+        {
+            Sender sender = session.sender;
+            /*
+            DynamicType type = begin.getRemoteChannelType();
+            if(type.kind() == Type.Kind.NULL)
+            {
+                System.out.println("begin remote channel was null");
+            }
+            else
+            {
+                System.out.println("begin remote channel type was: " + type.kind());
+            }
+            */
+
+            long channel = begin.getNextOutgoingId();
+            long incomingWindow = begin.getIncomingWindow();
+            long outgoingWindow = begin.getOutgoingWindow();
+            long handleMax = begin.getHandleMax();
+            //long remoteChannel = begin.getRemoteChannel(); //TODO(JAF): Can you check for null using the API?
+
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(0)
+                    .setPerformative(BEGIN);
+
+
+            begin.wrap(sender.getBuffer(), frame.bodyOffset(), true); //TODO(JAF): Figure out what should be her
+            begin.clear();
+            begin.maxLength(255)
+                .setRemoteChannel(0)
+                .setNextOutgoingId(1)
+                .setIncomingWindow(0)
+                .setOutgoingWindow(0)
+                .setHandleMax(1024);
+            frame.bodyChanged();
+            sender.send(frame.limit());
         }
     }
 

@@ -96,7 +96,8 @@ public class KompoundAmqpAeronIT
     }
 
     @Test
-    @Specification("amqp/connect.and.close")
+    @Ignore
+    @Specification("amqp/connection/connect.and.close")
     public void shouldConnectAndCloseAMQP() throws Exception
     {
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
@@ -155,6 +156,7 @@ public class KompoundAmqpAeronIT
                                 case TcpManagerTypeId.NEW_CONNECTION:
                                 case TcpManagerTypeId.RECEIVED_DATA:
                                 case TcpManagerTypeId.EOF:
+                                    System.out.println("typeId is: " + typeId);
                                     mikro.onMessage(header, typeId, buffer, offset, length);
                                     break;
                             }

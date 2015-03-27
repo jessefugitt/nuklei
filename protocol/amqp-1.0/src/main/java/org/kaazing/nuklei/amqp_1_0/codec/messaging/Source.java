@@ -18,6 +18,7 @@ package org.kaazing.nuklei.amqp_1_0.codec.messaging;
 import java.util.function.Consumer;
 
 import org.kaazing.nuklei.Flyweight;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.Optional;
 import org.kaazing.nuklei.amqp_1_0.codec.types.ArrayType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.BooleanType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.CompositeType;
@@ -35,14 +36,22 @@ import uk.co.real_logic.agrona.DirectBuffer;
 public final class Source extends CompositeType.Described
 {
     private final StringType address;
-    private final UIntType durable;
-    private final SymbolType expiryPolicy;
-    private final UIntType timeout;
-    private final BooleanType dynamic;
-    private final NodeProperties dynamicNodeProperties;
-    private final SymbolType distributionMode;
-    private final FilterSet.Embedded<Source> filter;
-    private final Outcome.Described defaultOutcome;
+    private final Optional<UIntType> durableField;
+    //private final UIntType durable;
+    private final Optional<SymbolType> expiryPolicyField;
+    //private final SymbolType expiryPolicy;
+    private final Optional<UIntType> timeoutField;
+    //private final UIntType timeout;
+    private final Optional<BooleanType> dynamicField;
+    //private final BooleanType dynamic;
+    private final Optional<NodeProperties> dynamicNodePropertiesField;
+    //private final NodeProperties dynamicNodeProperties;
+    private final Optional<SymbolType> distributionModeField;
+    //private final SymbolType distributionMode;
+    private final Optional<FilterSet.Embedded<Source>> filterField;
+    //private final FilterSet.Embedded<Source> filter;
+    private final Optional<Outcome.Described> defaultOutcomeField;
+    //private final Outcome.Described defaultOutcome;
     private final ArrayType outcomes;
     private final ArrayType capabilities;
 
@@ -52,38 +61,78 @@ public final class Source extends CompositeType.Described
         {
             limit(1, owner.limit());
         });
-        durable = new UIntType().watch((owner) ->
+        UIntType durable = new UIntType().watch((owner) ->
         {
             limit(2, owner.limit());
         });
-        expiryPolicy = new SymbolType().watch((owner) ->
+        durableField = new Optional<>(durable).watch((owner) ->
+        {
+            limit(2, owner.limit());
+        });
+
+        SymbolType expiryPolicy = new SymbolType().watch((owner) ->
         {
             limit(3, owner.limit());
         });
-        timeout = new UIntType().watch((owner) ->
+        expiryPolicyField = new Optional<>(expiryPolicy).watch((owner) ->
+        {
+            limit(3, owner.limit());
+        });
+
+        UIntType timeout = new UIntType().watch((owner) ->
         {
             limit(4, owner.limit());
         });
-        dynamic = new BooleanType().watch((owner) ->
+        timeoutField = new Optional<>(timeout).watch((owner) ->
+        {
+            limit(4, owner.limit());
+        });
+
+        BooleanType dynamic = new BooleanType().watch((owner) ->
         {
             limit(5, owner.limit());
         });
-        dynamicNodeProperties = new NodeProperties().watch((owner) ->
+        dynamicField = new Optional<>(dynamic).watch((owner) ->
+        {
+            limit(5, owner.limit());
+        });
+
+        NodeProperties dynamicNodeProperties = new NodeProperties().watch((owner) ->
         {
             limit(6, owner.limit());
         });
-        distributionMode = new SymbolType().watch((owner) ->
+        dynamicNodePropertiesField = new Optional<>(dynamicNodeProperties).watch((owner) ->
+        {
+            limit(6, owner.limit());
+        });
+
+        SymbolType distributionMode = new SymbolType().watch((owner) ->
         {
             limit(7, owner.limit());
         });
-        filter = new FilterSet.Embedded<>(this).watch((owner) ->
+        distributionModeField = new Optional<>(distributionMode).watch((owner) ->
+        {
+            limit(7, owner.limit());
+        });
+
+        FilterSet.Embedded<Source> filter = new FilterSet.Embedded<>(this).watch((owner) ->
         {
             limit(8, owner.limit());
         });
-        defaultOutcome = new Outcome.Described().watch((owner) ->
+        filterField = new Optional<>(filter).watch((owner) ->
+        {
+            limit(8, owner.limit());
+        });
+
+        Outcome.Described defaultOutcome = new Outcome.Described().watch((owner) ->
         {
             limit(9, owner.limit());
         });
+        defaultOutcomeField = new Optional<>(defaultOutcome).watch((owner) ->
+        {
+            limit(9, owner.limit());
+        });
+
         outcomes = new ArrayType().watch((owner) ->
         {
             limit(10, owner.limit());
@@ -128,12 +177,6 @@ public final class Source extends CompositeType.Described
         return this;
     }
 
-    public Source setAddress(Void value)
-    {
-        address().set(value);
-        return this;
-    }
-
     public <T> Source setAddress(MutableDirectBufferMutator<T> mutator, T value)
     {
         address().set(mutator, value);
@@ -145,74 +188,162 @@ public final class Source extends CompositeType.Described
         return address().get(accessor);
     }
 
+    public boolean isDurableNull()
+    {
+        return durable().isNull();
+    }
+
+    public Source setDurableNull()
+    {
+        durable().setNull();
+        return this;
+    }
+
     public Source setDurable(TerminusDurability value)
     {
-        durable().set(TerminusDurability.WRITE, value);
+        durable().getType().set(TerminusDurability.WRITE, value);
         return this;
     }
 
     public TerminusDurability getDurable()
     {
-        return durable().get(TerminusDurability.READ);
+        return durable().getType().get(TerminusDurability.READ);
+    }
+
+    public boolean isExpiryPolicyNull()
+    {
+        return expiryPolicy().isNull();
+    }
+
+    public Source setExpiryPolicyNull()
+    {
+        expiryPolicy().setNull();
+        return this;
     }
 
     public Source setExpiryPolicy(TerminusExpiryPolicy value)
     {
-        expiryPolicy().set(TerminusExpiryPolicy.WRITE, value);
+        expiryPolicy().getType().set(TerminusExpiryPolicy.WRITE, value);
         return this;
     }
 
     public TerminusExpiryPolicy getExpiryPolicy()
     {
-        return expiryPolicy().get(TerminusExpiryPolicy.READ);
+        return expiryPolicy().getType().get(TerminusExpiryPolicy.READ);
+    }
+
+    public boolean isTimeoutNull()
+    {
+        return timeout().isNull();
+    }
+
+    public Source setTimeoutNull()
+    {
+        timeout().setNull();
+        return this;
     }
 
     public Source setTimeout(long value)
     {
-        timeout().set(value);
+        timeout().getType().set(value);
         return this;
     }
 
     public long getTimeout()
     {
-        return timeout().get();
+        return timeout().getType().get();
+    }
+
+    public boolean isDynamicNull()
+    {
+        return dynamic().isNull();
+    }
+
+    public Source setDynamicNull()
+    {
+        dynamic().setNull();
+        return this;
     }
 
     public Source setDynamic(boolean value)
     {
-        dynamic().set(value);
+        dynamic().getType().set(value);
         return this;
     }
 
     public boolean getDynamic()
     {
-        return dynamic().get();
+        return dynamic().getType().get();
+    }
+
+    public boolean isDynamicNodePropertiesNull()
+    {
+        return dynamicNodeProperties().isNull();
+    }
+
+    public Source setDynamicNodePropertiesNull()
+    {
+        dynamicNodeProperties().setNull();
+        return this;
     }
 
     public NodeProperties getDynamicNodeProperties()
     {
-        return dynamicNodeProperties();
+        return dynamicNodeProperties().getType();
+    }
+
+    public boolean isDistributionModeNull()
+    {
+        return distributionMode().isNull();
+    }
+
+    public Source setDistributionModeNull()
+    {
+        distributionMode().setNull();
+        return this;
     }
 
     public Source setDistributionMode(DistributionMode value)
     {
-        distributionMode().set(DistributionMode.WRITE, value);
+        distributionMode().getType().set(DistributionMode.WRITE, value);
         return this;
     }
 
     public DistributionMode getDistributionMode()
     {
-        return distributionMode().get(DistributionMode.READ);
+        return distributionMode().getType().get(DistributionMode.READ);
+    }
+
+    public boolean isFilterNull()
+    {
+        return filter().isNull();
+    }
+
+    public Source setFilterNull()
+    {
+        filter().setNull();
+        return this;
     }
 
     public FilterSet.Embedded<Source> getFilter()
     {
-        return filter();
+        return filter().getType();
+    }
+
+    public boolean isDefaultOutcomeNull()
+    {
+        return defaultOutcome().isNull();
+    }
+
+    public Source setDefaultOutcomeNull()
+    {
+        defaultOutcome().setNull();
+        return this;
     }
 
     public Outcome.Described getDefaultOutcome()
     {
-        return defaultOutcome();
+        return defaultOutcome().getType();
     }
 
     public Source setOutcomes(ArrayType value)
@@ -242,44 +373,44 @@ public final class Source extends CompositeType.Described
         return address.wrap(mutableBuffer(), offsetBody(), true);
     }
 
-    private UIntType durable()
+    private Optional<UIntType> durable()
     {
-        return durable.wrap(mutableBuffer(), address().limit(), true);
+        return durableField.wrap(mutableBuffer(), address().limit(), true);
     }
 
-    private SymbolType expiryPolicy()
+    private Optional<SymbolType> expiryPolicy()
     {
-        return expiryPolicy.wrap(mutableBuffer(), durable().limit(), true);
+        return expiryPolicyField.wrap(mutableBuffer(), durable().limit(), true);
     }
 
-    private UIntType timeout()
+    private Optional<UIntType> timeout()
     {
-        return timeout.wrap(mutableBuffer(), expiryPolicy().limit(), true);
+        return timeoutField.wrap(mutableBuffer(), expiryPolicy().limit(), true);
     }
 
-    private BooleanType dynamic()
+    private Optional<BooleanType> dynamic()
     {
-        return dynamic.wrap(mutableBuffer(), timeout().limit(), true);
+        return dynamicField.wrap(mutableBuffer(), timeout().limit(), true);
     }
 
-    private NodeProperties dynamicNodeProperties()
+    private Optional<NodeProperties> dynamicNodeProperties()
     {
-        return dynamicNodeProperties.wrap(mutableBuffer(), dynamic().limit(), true);
+        return dynamicNodePropertiesField.wrap(mutableBuffer(), dynamic().limit(), true);
     }
 
-    private SymbolType distributionMode()
+    private Optional<SymbolType> distributionMode()
     {
-        return distributionMode.wrap(mutableBuffer(), dynamicNodeProperties().limit(), true);
+        return distributionModeField.wrap(mutableBuffer(), dynamicNodeProperties().limit(), true);
     }
 
-    private FilterSet.Embedded<Source> filter()
+    private Optional<FilterSet.Embedded<Source>> filter()
     {
-        return filter.wrap(mutableBuffer(), distributionMode().limit(), true);
+        return filterField.wrap(mutableBuffer(), distributionMode().limit(), true);
     }
 
-    private Outcome.Described defaultOutcome()
+    private Optional<Outcome.Described> defaultOutcome()
     {
-        return defaultOutcome.wrap(mutableBuffer(), filter().limit(), true);
+        return defaultOutcomeField.wrap(mutableBuffer(), filter().limit(), true);
     }
 
     private ArrayType outcomes()

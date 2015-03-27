@@ -16,6 +16,7 @@
 package org.kaazing.nuklei.amqp_1_0.codec.types;
 
 import org.kaazing.nuklei.FlyweightBE;
+import uk.co.real_logic.agrona.DirectBuffer;
 
 public abstract class Type extends FlyweightBE
 {
@@ -30,4 +31,10 @@ public abstract class Type extends FlyweightBE
 
     public abstract Kind kind();
 
+    @Override
+    public Type wrap(final DirectBuffer buffer, final int offset, boolean mutable)
+    {
+        super.wrap(buffer, offset, mutable);
+        return this;
+    }
 }

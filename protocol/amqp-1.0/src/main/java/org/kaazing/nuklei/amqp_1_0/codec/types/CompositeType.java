@@ -54,11 +54,12 @@ public class CompositeType extends ListType
 
         private final ULongType.Descriptor descriptor;
         private final CompositeType composite;
+        //TODO(JAF): Not currently being used because it breaks decoding
         private int limit;
 
         public Described()
         {
-            descriptor = new ULongType.Descriptor().watch((owner) -> limit(owner.limit()));
+            descriptor = new ULongType.Descriptor(); //.watch((owner) -> limit(owner.limit()));
             composite = new CompositeType().watch((owner) -> limit(owner.limit()));
         }
 
@@ -82,16 +83,19 @@ public class CompositeType extends ListType
             return this;
         }
 
+         //TODO(JAF): This breaks decoding when using the stored limit variable
         protected void limit(int limit)
         {
             this.limit = limit;
             notifyChanged();
         }
 
-        @Override
+        //@Override
         public int limit()
         {
-            return limit;
+            //TODO(JAF): Figure out the tests that require persisting the limit and make sure those still work
+            //return limit;
+            return composite().limit();
         }
 
         public void limit(int count, int limit)

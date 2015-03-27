@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 
 import org.kaazing.nuklei.Flyweight;
 import org.kaazing.nuklei.amqp_1_0.codec.definitions.Fields;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.Optional;
 import org.kaazing.nuklei.amqp_1_0.codec.types.ArrayType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.CompositeType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.UIntType;
@@ -43,7 +44,8 @@ public final class Begin extends CompositeType
 
     public static final long DEFAULT_HANDLE_MAX = 4294967295L;
 
-    private final UShortType remoteChannel;
+    private final Optional<UShortType> remoteChannelField;
+    //private final UShortType remoteChannel;
     private final UIntType nextOutgoingId;
     private final UIntType incomingWindow;
     private final UIntType outgoingWindow;
@@ -54,10 +56,16 @@ public final class Begin extends CompositeType
 
     public Begin()
     {
-        remoteChannel = new UShortType().watch((owner) ->
+        UShortType remoteChannel = new UShortType().watch((owner) ->
         {
             limit(1, owner.limit());
         });
+
+        remoteChannelField = new Optional<>(remoteChannel).watch((owner) ->
+        {
+            limit(1, owner.limit());
+        });
+
         nextOutgoingId = new UIntType().watch((owner) ->
         {
             limit(2, owner.limit());
@@ -122,15 +130,26 @@ public final class Begin extends CompositeType
         return this;
     }
 
+    public boolean isRemoteChannelNull()
+    {
+        return remoteChannelField().isNull();
+    }
+
+    public Begin setRemoteChannelNull()
+    {
+        remoteChannelField().setNull();
+        return this;
+    }
+
     public Begin setRemoteChannel(int value)
     {
-        remoteChannel().set(value);
+        remoteChannelField().getType().set(value);
         return this;
     }
 
     public long getRemoteChannel()
     {
-        return remoteChannel().get();
+        return remoteChannelField().getType().get();
     }
 
     public Begin setNextOutgoingId(long value)
@@ -204,6 +223,12 @@ public final class Begin extends CompositeType
         return properties();
     }
 
+    private Optional<UShortType> remoteChannelField()
+    {
+        return remoteChannelField.wrap(mutableBuffer(), offsetBody(), true);
+    }
+
+    /*
     private UShortType remoteChannel()
     {
         return remoteChannel.wrap(mutableBuffer(), offsetBody(), true);
@@ -213,6 +238,12 @@ public final class Begin extends CompositeType
     {
         return nextOutgoingId.wrap(mutableBuffer(), remoteChannel().limit(), true);
     }
+    */
+    private UIntType nextOutgoingId()
+    {
+        return nextOutgoingId.wrap(mutableBuffer(), remoteChannelField().limit(), true);
+    }
+
 
     private UIntType incomingWindow()
     {
