@@ -50,11 +50,11 @@ public class Message extends Type
     //         one or more AMQP Sequence
     //         one AMQP Value
     // footer
-//    private final Header header;
-//    private final DeliveryAnnotations deliveryAnnotations;
-//    private final MessageAnnotations messageAnnotations;
-//    private final Properties properties;
-//    private final ApplicationProperites applicationProperties;
+    private final Header header;
+    //private final DeliveryAnnotations deliveryAnnotations;
+    private final MessageAnnotations messageAnnotations;
+    private final Properties properties;
+    private final ApplicationProperties applicationProperties;
 
     // FIXME: there should be a kind() method that is driven by the descriptor, that
     //        method will determine whether Data, AmqpSequence, or AmqpValue is used,
@@ -69,26 +69,35 @@ public class Message extends Type
 
     public Message()
     {
-//        header = new Header().watch((owner) ->
-//        {
-//            limit(1, owner.limit());
-//        });
+        header = new Header().watch((owner) ->
+        {
+            limit(owner.limit());
+        });
 //        deliveryAnnotations = new DeliveryAnnotations().watch((owner) ->
 //        {
 //            limit(2, owner.limit());
 //        });
-//        messageAnnotations = new MessageAnnotations().watch((owner) ->
-//        {
-//            limit(3, owner.limit());
-//        });
-//        properties = new Properties().watch((owner) ->
-//        {
-//            limit(4, owner.limit());
-//        });
-//        applicationProperties = new ApplicationProperites().watch((owner) ->
-//        {
-//            limit(5, owner.limit());
-//        });
+
+        messageAnnotations = new MessageAnnotations().watch((owner) ->
+        {
+            limit(owner.limit());
+        });
+
+        properties = new Properties().watch((owner) ->
+        {
+            limit(owner.limit());
+        });
+
+        applicationProperties = new ApplicationProperties().watch((owner) ->
+        {
+            limit(owner.limit());
+        });
+
+        descriptor = new ULongType.Descriptor().watch((owner) ->
+        {
+            limit(owner.limit());
+        });
+
 //        data = new Data().watch((owner) ->
 //        {
 //            limit(6, owner.limit());
@@ -97,10 +106,7 @@ public class Message extends Type
 //        {
 //            limit(7, owner.limit());
 //        });
-        descriptor = new ULongType.Descriptor().watch((owner) ->
-        {
-            limit(owner.limit());
-        });
+
         value = new AmqpValue().watch((owner) ->
         {
 //            limit(8, owner.limit());
@@ -144,6 +150,26 @@ public class Message extends Type
         return limit;
     }
 
+    public Header getHeader()
+    {
+        return header();
+    }
+
+    public MessageAnnotations getMessageAnnotations()
+    {
+        return messageAnnotations();
+    }
+
+    public Properties getProperties()
+    {
+        return properties();
+    }
+
+    public ApplicationProperties getApplicationProperties()
+    {
+        return applicationProperties();
+    }
+
     public Message setDescriptor(long code)
     {
         descriptor().set(code);
@@ -161,9 +187,30 @@ public class Message extends Type
         return value().getValue(accessor);
     }
 
+    private Header header()
+    {
+        return header.wrap(buffer(), offset(), true);
+    }
+
+    private MessageAnnotations messageAnnotations()
+    {
+        return messageAnnotations.wrap(buffer(), header().limit(), true);
+    }
+
+    private Properties properties()
+    {
+        return properties.wrap(buffer(), messageAnnotations().limit(), true);
+    }
+
+    private ApplicationProperties applicationProperties()
+    {
+        return applicationProperties.wrap(buffer(), properties().limit(), true);
+    }
+
     private ULongType.Descriptor descriptor()
     {
-        return descriptor.wrap(buffer(), offset(), true);
+        //return descriptor.wrap(buffer(), offset(), true);
+        return descriptor.wrap(buffer(), applicationProperties().limit(), true);
     }
 
     private AmqpValue value()

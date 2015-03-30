@@ -31,10 +31,10 @@ public class AeronTransportAdapterTest
     public void setUp()
     {
         localMessageHandlerCount = 0;
-        BiConsumer<String, Message> testLocalMessageHandler = new BiConsumer<String, Message>()
+        BiConsumer<String, CanonicalMessage> testLocalMessageHandler = new BiConsumer<String, CanonicalMessage>()
         {
             @Override
-            public void accept(String logicalName, Message message)
+            public void accept(String logicalName, CanonicalMessage message)
             {
                 localMessageHandlerCount++;
             }
@@ -113,10 +113,11 @@ public class AeronTransportAdapterTest
         verify(aeronStaticTransportAdapter.aeronWrapper).addPublication(physicalStream.getChannel(),
                 physicalStream.getStreamId());
 
-        Message mockMessage = mock(Message.class);
-        aeronStaticTransportAdapter.onRemoteMessageReceived(logicalName, mockMessage);
+        CanonicalMessage mockCanonicalMessage = mock(CanonicalMessage.class);
+        aeronStaticTransportAdapter.onRemoteMessageReceived(logicalName, mockCanonicalMessage);
 
-        verify(mockPublication).offer(mockMessage.getBuffer(), mockMessage.getOffset(), mockMessage.getLength());
+        verify(mockPublication).offer(mockCanonicalMessage.getBuffer(), mockCanonicalMessage.getOffset(),
+                mockCanonicalMessage.getLength());
     }
 
     @Test
@@ -157,7 +158,7 @@ public class AeronTransportAdapterTest
 
         //Simulate a remote producer
         adapter.onRemoteProducerDetected("topic.ABC");
-        adapter.onRemoteMessageReceived("topic.ABC", new Message()
+        adapter.onRemoteMessageReceived("topic.ABC", new CanonicalMessage()
         {
             @Override
             public DirectBuffer getBuffer()

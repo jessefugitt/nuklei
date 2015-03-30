@@ -6,7 +6,7 @@ import uk.co.real_logic.agrona.DirectBuffer;
  *
  *
  */
-public interface Message
+public interface CanonicalMessage
 {
     DirectBuffer getBuffer();
     int getOffset();

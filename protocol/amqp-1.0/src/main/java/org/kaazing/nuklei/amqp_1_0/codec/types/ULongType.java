@@ -177,6 +177,8 @@ public final class ULongType extends Type
 
         public <T> Descriptor set(ToLongFunction<T> mutator, T value)
         {
+            //TODO(JAF): Confirm that this fix works in all cases
+            mutableBuffer().putByte(offset(), (byte)0x00);
             code.set(mutator, value);
             return this;
         }

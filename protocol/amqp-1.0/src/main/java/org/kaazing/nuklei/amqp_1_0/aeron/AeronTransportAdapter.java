@@ -31,7 +31,7 @@ public interface AeronTransportAdapter
     void onLocalConsumerDetected(AeronPhysicalStream physicalStream);
     void onLocalConsumerRemoved(AeronPhysicalStream physicalStream);
 
-    void onRemoteMessageReceived(String logicalName, Message message);
+    void onRemoteMessageReceived(String logicalName, CanonicalMessage canonicalMessage);
     void onLocalMessageReceived(String logicalName, AeronPhysicalStream physicalStream, AeronMessage message);
 
     void start();

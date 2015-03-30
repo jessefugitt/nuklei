@@ -15,11 +15,7 @@
  */
 package org.kaazing.nuklei.amqp_1_0.link;
 
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Attach;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Detach;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Disposition;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Frame;
-import org.kaazing.nuklei.amqp_1_0.codec.transport.Transfer;
+import org.kaazing.nuklei.amqp_1_0.codec.transport.*;
 import org.kaazing.nuklei.amqp_1_0.sender.Sender;
 
 /*
@@ -68,4 +64,14 @@ public class Link<L>
         sender.send(frame.limit());
         stateMachine.sent(this, frame, transfer);
     }
+
+    public void send(Frame frame, Flow flow)
+    {
+        assert flow.limit() == frame.limit();
+        sender.send(frame.limit());
+        //TODO(JAF): Do we need state machine changes for flow
+        //stateMachine.sent(this, frame, flow);
+    }
+
+
 }

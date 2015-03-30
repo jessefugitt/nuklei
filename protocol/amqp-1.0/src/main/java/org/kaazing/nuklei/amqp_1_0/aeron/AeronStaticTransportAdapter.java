@@ -17,11 +17,11 @@ import java.util.function.BiConsumer;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
-import uk.co.real_logic.aeron.common.BackoffIdleStrategy;
-import uk.co.real_logic.aeron.common.IdleStrategy;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
 import uk.co.real_logic.agrona.DirectBuffer;
+import uk.co.real_logic.agrona.concurrent.BackoffIdleStrategy;
+import uk.co.real_logic.agrona.concurrent.IdleStrategy;
 //import uk.co.real_logic.aeron.driver.MediaDriver;
 
 /**
@@ -55,14 +55,14 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     protected final AeronLogicalNameMapping logicalNameMapping = new AeronLogicalNameMapping();
     protected final Map<AeronPhysicalStream, Publication> proxyPublicationMap = new HashMap<>();
     protected final Map<AeronPhysicalStream, Subscription> proxySubscriptionsMap = new HashMap<>();
-    private BiConsumer<String, Message> messageHandler;
+    private BiConsumer<String, CanonicalMessage> messageHandler;
     final ExecutorService executor = Executors.newFixedThreadPool(1);
 
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy(
             100, 10, TimeUnit.MICROSECONDS.toNanos(1), TimeUnit.MICROSECONDS.toNanos(100));
 
-    public AeronStaticTransportAdapter(BiConsumer<String, Message> messageHandler)
+    public AeronStaticTransportAdapter(BiConsumer<String, CanonicalMessage> messageHandler)
     {
         this.messageHandler = messageHandler;
     }
@@ -358,7 +358,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     @Override
-    public void onRemoteMessageReceived(String logicalName, Message message)
+    public void onRemoteMessageReceived(String logicalName, CanonicalMessage canonicalMessage)
     {
         //TODO(JAF): Convert these messages and pass them out the local side
         List<AeronPhysicalStream> physicalStreams = logicalNameMapping.getLogicalNameToPublicationsMap().get(logicalName);
@@ -369,11 +369,8 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
                 Publication publication = proxyPublicationMap.get(physicalStream);
                 if(publication != null)
                 {
-                    //From example:
-                    //final String messageStr = "Hello World! " + i;
-                    //BUFFER.putBytes(0, messageStr.getBytes());
-                    //final boolean result = publication.offer(BUFFER, 0, messageStr.getBytes().length);
-                    boolean result = publication.offer(message.getBuffer(), message.getOffset(), message.getLength());
+                    boolean result = publication.offer(canonicalMessage.getBuffer(), canonicalMessage.getOffset(),
+                            canonicalMessage.getLength());
                     //if(result == false)
                     //{
                         //TODO(JAF): Add error handling on failure

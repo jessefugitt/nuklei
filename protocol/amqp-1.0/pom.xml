@@ -61,9 +61,14 @@
             <artifactId>nuklei-tcp</artifactId>
             <version>${project.version}</version>
         </dependency>
-		<dependency>
+        <dependency>
             <groupId>uk.co.real-logic</groupId>
             <artifactId>aeron-client</artifactId>
+            <version>${aeron.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>uk.co.real-logic</groupId>
+            <artifactId>aeron-common</artifactId>
             <version>${aeron.version}</version>
         </dependency>
         <dependency>

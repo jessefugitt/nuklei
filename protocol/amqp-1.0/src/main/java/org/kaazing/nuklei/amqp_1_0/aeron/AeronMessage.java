@@ -6,7 +6,7 @@ import uk.co.real_logic.agrona.DirectBuffer;
 /**
  *
  */
-public class AeronMessage implements Message
+public class AeronMessage implements CanonicalMessage
 {
     private DirectBuffer buffer;
     private int offset;

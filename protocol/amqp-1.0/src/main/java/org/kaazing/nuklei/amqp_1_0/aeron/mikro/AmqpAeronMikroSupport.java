@@ -1,10 +1,8 @@
 package org.kaazing.nuklei.amqp_1_0.aeron.mikro;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.CLOSE;
-import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.BEGIN;
-import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.OPEN;
-import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.ATTACH;
+import static org.kaazing.nuklei.amqp_1_0.codec.definitions.Role.RECEIVER;
+import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.*;
 import static org.kaazing.nuklei.amqp_1_0.codec.transport.Header.AMQP_PROTOCOL;
 
 import java.nio.ByteBuffer;
@@ -12,16 +10,20 @@ import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 import org.kaazing.nuklei.amqp_1_0.AmqpMikroFactory;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronStaticTransportAdapter;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronTransportAdapter;
-import org.kaazing.nuklei.amqp_1_0.aeron.Message;
+import org.kaazing.nuklei.amqp_1_0.aeron.CanonicalMessage;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.ReceiverSettleMode;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.Role;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.SenderSettleMode;
 import org.kaazing.nuklei.amqp_1_0.codec.messaging.*;
 import org.kaazing.nuklei.amqp_1_0.codec.transport.*;
+import org.kaazing.nuklei.amqp_1_0.codec.transport.Header;
 import org.kaazing.nuklei.amqp_1_0.connection.Connection;
 import org.kaazing.nuklei.amqp_1_0.connection.ConnectionFactory;
 import org.kaazing.nuklei.amqp_1_0.connection.ConnectionHandler;
@@ -52,18 +54,20 @@ public class AmqpAeronMikroSupport
 {
     private static final int SEND_BUFFER_SIZE = 1024;
 
-    private final BiConsumer<String, Message> aeronMessageHandler = new BiConsumer<String, Message>()
+    private final BiConsumer<String, CanonicalMessage> canonicalMessageHandler = new BiConsumer<String, CanonicalMessage>()
     {
         @Override
-        public void accept(String logicalName, Message aeronMessage)
+        public void accept(String logicalName, CanonicalMessage canonicalMessage)
         {
-            //TODO(JAF): This is where aeron messages will be passed from local publications
+            //TODO(JAF): This is where aeron canonical messages will be passed from local publications
         }
     };
 
-    private final AeronTransportAdapter aeronTransportAdapter = new AeronStaticTransportAdapter(aeronMessageHandler);
-    private final Map<String, AmqpProducer> amqpProducerMap = new HashMap<String, AmqpProducer>();
-    private final Map<String, AmqpConsumer> amqpConsumerMap = new HashMap<String, AmqpConsumer>();
+    private final AeronTransportAdapter aeronTransportAdapter = new AeronStaticTransportAdapter(canonicalMessageHandler);
+
+    //TODO(JAF): Need to convert to multimap to support multiple producers/consumers with same logical address
+    private final Map<String, AmqpProducer> amqpProducerMap = new ConcurrentHashMap<String, AmqpProducer>();
+    private final Map<String, AmqpConsumer> amqpConsumerMap = new ConcurrentHashMap<String, AmqpConsumer>();
 
     public AmqpAeronMikroSupport()
     {
@@ -118,10 +122,10 @@ public class AmqpAeronMikroSupport
 
     private class AmqpLink extends Link<AmqpLink>
     {
-        protected String attachLinkName;
         protected Map<String, AmqpProducer> producerMap;
         protected Map<String, AmqpConsumer> consumerMap;
         protected AeronTransportAdapter aeronTransportAdapter;
+        protected String linkAddress;
         public AmqpLink(Session<AmqpSession, AmqpLink> owner,
                         LinkStateMachine<AmqpLink> stateMachine,
                         Map<String, AmqpProducer> producerMap,
@@ -178,156 +182,212 @@ public class AmqpAeronMikroSupport
         public Link<AmqpLink> newLink(Session<AmqpSession, AmqpLink> session)
         {
             return new AmqpLink(session, new LinkStateMachine<AmqpLink>(
-                    new AmqpAeronLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter);
+                    new AmqpLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter);
                     //new LinkHooks<AmqpTestLink>()));
         }
     }
 
-    private static class AmqpAeronLinkHooks extends LinkHooks<AmqpLink>
+    private static class AmqpLinkHooks extends LinkHooks<AmqpLink>
     {
-        private static final DirectBufferAccessor<String> READ_UTF_8 = newAccessor(UTF_8);
+        //private static final Frame sendFrame = new Frame();
+        //private static final Transfer sendTransfer = new Transfer();
+        private static final AmqpMessage MESSAGE = new AmqpMessage();
 
-        public AmqpAeronLinkHooks()
+        public AmqpLinkHooks()
         {
-            whenAttachReceived = AmqpAeronLinkHooks::whenAttachReceived;
+            whenAttachReceived = AmqpLinkHooks::whenAttachReceived;
+            whenTransferReceived = AmqpLinkHooks::whenTransferReceived;
+            whenDetachReceived = AmqpLinkHooks::whenDetachReceived;
         }
 
         private static void whenAttachReceived(Link<AmqpLink> link, Frame frame, Attach attach)
         {
+
+            Role role = null;
             AmqpLink parameter = link.parameter;
-            //parameter.producer = parameter.session.createProducer(null);
-            //parameter.attachLinkName = attach.getName(READ_UTF_8);
-            //System.out.println("Attach received with name: " + parameter.attachLinkName);
-
-            //String name = attach.getName(READ_UTF_8);
-            //long handle = attach.getHandle();
-            //Role role = attach.getRole();
-            //SenderSettleMode senderSettleMode = attach.getSendSettleMode();
-            //ReceiverSettleMode receiverSettleMode = attach.getReceiveSettleMode();
-            //Attach.TerminusDescriptor descriptor = attach.getSourceTerminusDescriptor();
-            Source source = attach.getSource();
-            String sourceAddress = source.getAddress(READ_UTF_8);
-            TerminusDurability durability = source.getDurable();
-            TerminusExpiryPolicy expiryPolicy = source.getExpiryPolicy();
-            long timeout = source.getTimeout();
-
-            Target target = attach.getTarget();
-            String targetAddress = target.getAddress(READ_UTF_8);
-
-
-
-            //String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
-            //System.out.println("Attach received with source address: " + sourceAddress);
-
-            //String targetAddress = attach.getTarget().getAddress(READ_UTF_8);
-            //System.out.println("Attach received with target address: " + targetAddress);
-
-            parameter.attachLinkName = attach.getName(READ_UTF_8);
-            System.out.println("Attach received with name: " + parameter.attachLinkName);
-
-            //TODO(JAF): Figure out how to determine if this is a producer or consumer
-            if(parameter.attachLinkName.indexOf("->") != -1)
+            String attachName = attach.getName(READ_UTF_8);
+            String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
+            String targetAddress = attach.getTarget().getAddress(READ_UTF_8);
+            long handle = 0; //TODO(JAF): This should not be hard coded to zero because it is needed during detach
+            if (attach.getRole() == Role.RECEIVER)
             {
-                AmqpConsumer localConsumer = new AmqpConsumer(parameter.attachLinkName);
-                parameter.consumerMap.put(localConsumer.topicName, localConsumer);
-                parameter.aeronTransportAdapter.onRemoteConsumerDetected(localConsumer.topicName);
+                parameter.linkAddress = targetAddress;
+                //TODO(JAF): Need to double check that this is target address vs source address
+                AmqpConsumer localConsumer = new AmqpConsumer(targetAddress, link, handle);
+                parameter.consumerMap.put(targetAddress, localConsumer);
+                parameter.aeronTransportAdapter.onRemoteConsumerDetected(targetAddress);
 
+                role = Role.SENDER;
             }
-            else if(parameter.attachLinkName.indexOf("<-") != -1)
+            else
             {
-                AmqpProducer localProducer = new AmqpProducer(parameter.attachLinkName);
-                parameter.producerMap.put(localProducer.topicName, localProducer);
-                parameter.aeronTransportAdapter.onRemoteProducerDetected(localProducer.topicName);
+                parameter.linkAddress = targetAddress;
 
-                //TODO(JAF): Remove the code that sends a fake message to ensure it is working
+                AmqpProducer localProducer = new AmqpProducer(targetAddress, link, handle);
+                parameter.producerMap.put(targetAddress, localProducer);
+                parameter.aeronTransportAdapter.onRemoteProducerDetected(targetAddress);
 
-                final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
-                final String text = "Hello World!";
-                byte[] bytes = text.getBytes();
-                buffer.putBytes(0, text.getBytes());
-                final int offset = 0;
-                final int length = bytes.length;
-                Message testMessage = new Message()
-                {
-                    @Override
-                    public DirectBuffer getBuffer()
-                    {
-                        return buffer;
-                    }
-
-                    @Override
-                    public int getOffset()
-                    {
-                        return offset;
-                    }
-
-                    @Override
-                    public int getLength()
-                    {
-                        return length;
-                    }
-                };
-
-                //final boolean result = publication.offer(buffer, 0, message.getBytes().length);
-                System.out.println("Sending initial message to aeron transport adapter on topic: " + localProducer.topicName);
-                parameter.aeronTransportAdapter.onRemoteMessageReceived(localProducer.topicName, testMessage);
-
+                role = Role.RECEIVER;
             }
+
+            Sender sender = link.sender;
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                  .setDataOffset(2)
+                  .setType(0)
+                  .setChannel(0)
+                  .setPerformative(ATTACH);
+            attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                  .maxLength(255)
+                  .setName(WRITE_UTF_8, attachName)
+                  .setHandle(handle)
+                  .setRole(role)
+                  .setSendSettleMode(SenderSettleMode.MIXED)
+                  .setReceiveSettleMode(ReceiverSettleMode.FIRST);
+            attach.getSource()
+                  .setDescriptor()
+                  .maxLength(255)
+                  .setAddress(WRITE_UTF_8, sourceAddress)
+                  .setDurable(TerminusDurability.NONE)
+                  .setExpiryPolicy(TerminusExpiryPolicy.SESSION_END) //.setExpiryPolicy(TerminusExpiryPolicy.LINK_DETACH);
+                  .setTimeout(0L)
+                  .setDynamic(false)
+                  .setDynamicNodePropertiesNull()
+                  .setDistributionModeNull()
+                  .setFilterNull()
+                  .getDefaultOutcome().setDeliveryState(Outcome.ACCEPTED).getComposite().maxLength(0).clear();
+            attach.getTarget()
+                  .setDescriptor()
+                  .maxLength(255)
+                  .setAddress(WRITE_UTF_8, targetAddress);
+            frame.bodyChanged();
+            link.send(frame, attach);
+
+            frame.setPerformative(FLOW);
+            Flow flow = Flow.LOCAL_REF.get();
+            flow.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .clear()
+                    .maxLength(255);
+            flow.setNextIncomingId(0)
+                    .setIncomingWindow(Integer.MAX_VALUE)
+                    .setNextOutgoingId(1)
+                    .setOutgoingWindow(0)
+                    .setHandle(0)
+                    .setDeliveryCount(0)
+                    .setLinkCredit(1000);
+            frame.bodyChanged();
+            link.send(frame, flow);
+
+        }
+
+        private static void whenDetachReceived(Link<AmqpLink> link, Frame frame, Detach detach)
+        {
+            //TODO(JAF): Need to remove the link from the producer/consumer map once it has been detached
 
             Sender sender = link.sender;
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
                     .setChannel(0)
-                    .setPerformative(ATTACH);
-
-            attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .setPerformative(DETACH);
+            detach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                     .maxLength(255)
-                    .clear();
+                    .setHandle(0)
+                    .setClosed(true);
             frame.bodyChanged();
-            sender.send(frame.limit());
+            link.send(frame, detach);
+        }
 
-            //TODO: This isn't working to send ATTACH back to the sender
+        private static void whenTransferReceived(Link<AmqpLink> link, Frame frame, Transfer transfer)
+        {
+            // TODO: This should settle only when required based on the incoming settled state
+            Sender sender = link.sender;
+
+            System.out.println("Received message transfer (handle " + transfer.getHandle() + ") on link (" + link + ")");
+            //System.out.println("Original Buffer: " + toHex(sender.getBuffer().byteArray(), sender.getOffset(), 20));
+
+            long handle = transfer.getHandle();
+            long deliveryId = transfer.getDeliveryId();
+            String deliveryTag = transfer.getDeliveryTag(READ_UTF_8);
+            long format = transfer.getMessageFormat();
+            boolean settled = transfer.getSettled();
+            // send transfer to other attached session
+            org.kaazing.nuklei.amqp_1_0.codec.messaging.Message message = transfer.getMessage();
+
+            // get the string out
+            String messageString = message.getValue(READ_UTF_8);
+            //TODO(JAF): Don't allocate new byte arrays like this
+            byte[] bytes = messageString.getBytes();
+            MESSAGE.getBuffer().putBytes(0, bytes);
+            MESSAGE.setOffset(0);
+            MESSAGE.setLength(bytes.length);
+
+            System.out.println("Sending message to aeron transport from amqp address: " + link.parameter.linkAddress);
+            link.parameter.aeronTransportAdapter.onRemoteMessageReceived(link.parameter.linkAddress, MESSAGE);
+            System.out.println("Message sent to aeron subscribers...");
 
 
-
-
-            /* Old example
-            sender.wrap(frame)
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
                     .setChannel(0)
-                    .setPerformative(OPEN);
-            attach.wrap(frame.buffer(), frame.bodyOffset(), false)
-                    .maxLength(255)
-                    .clear();
-            */
-            //connection.send(frame, open);
+                    .setPerformative(DISPOSITION);
+            Disposition disposition = Disposition.LOCAL_REF.get();
+            disposition.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .setRole(RECEIVER)
+                    .setFirst(deliveryId)
+                    .setLast(deliveryId)
+                    .setSettled(true)
+                    .getState().setDeliveryState(DeliveryState.ACCEPTED);
+            frame.bodyChanged();
+            link.send(frame, disposition);
 
-            //frame.bodyChanged();
-            //sender.send(frame.limit());
+            /*
+            // find the target session, get sendBuffer for said session, new Transfer frame to that session with
+            // just decoded Message body
+            sendFrame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(0)
+                    .setPerformative(TRANSFER);
+            sendTransfer.wrap(sender.getBuffer(), sendFrame.bodyOffset(), true)
+                    .setHandle(0)
+                    .setDeliveryId(0)
+                    .setDeliveryTag(WRITE_UTF_8, "\0")
+                    .setMessageFormat(0)
+                    .setSettled(true);
+            sendTransfer.getMessage()
+                    .setDescriptor(0x77L)
+                    .setValue(WRITE_UTF_8, messageString);
+            sendFrame.setLength(sendTransfer.limit() - sendFrame.offset());
+            */
+            //TODO(JAF): Lookup receiver link and send it
+            //receiverLink.send(sendFrame, sendTransfer);
         }
     }
 
     private static class AmqpProducer
     {
-        private final String linkName;
-        private final String topicName;
-        public AmqpProducer(String linkName)
+        private final Link<AmqpLink> link;
+        private long handle;
+        private final String address;
+        public AmqpProducer(String address, Link<AmqpLink> link, long handle)
         {
-            this.linkName = linkName;
-            this.topicName = linkName.split("<-")[0];
+            this.link = link;
+            this.address = address;
+            this.handle = handle;
         }
     }
 
     private static class AmqpConsumer
     {
-        private final String linkName;
-        private final String topicName;
-        public AmqpConsumer(String linkName)
+        private final Link<AmqpLink> link;
+        private long handle;
+        private final String address;
+        public AmqpConsumer(String address, Link<AmqpLink> link, long handle)
         {
-            this.linkName = linkName;
-            this.topicName = linkName.split("->")[0];
+            this.link = link;
+            this.address = address;
+            this.handle = handle;
         }
     }
 
@@ -405,46 +465,55 @@ public class AmqpAeronMikroSupport
         public AmqpSessionHooks()
         {
             whenBeginReceived = AmqpSessionHooks::whenBeginReceived;
+            this.whenEndReceived = AmqpSessionHooks::whenEndReceived;
         }
 
         private static void whenBeginReceived(Session<AmqpSession, AmqpLink> session, Frame frame, Begin begin)
         {
             Sender sender = session.sender;
-            /*
-            DynamicType type = begin.getRemoteChannelType();
-            if(type.kind() == Type.Kind.NULL)
-            {
-                System.out.println("begin remote channel was null");
-            }
-            else
-            {
-                System.out.println("begin remote channel type was: " + type.kind());
-            }
-            */
-
-            long channel = begin.getNextOutgoingId();
-            long incomingWindow = begin.getIncomingWindow();
-            long outgoingWindow = begin.getOutgoingWindow();
-            long handleMax = begin.getHandleMax();
-            //long remoteChannel = begin.getRemoteChannel(); //TODO(JAF): Can you check for null using the API?
-
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
                     .setChannel(0)
                     .setPerformative(BEGIN);
-
-
-            begin.wrap(sender.getBuffer(), frame.bodyOffset(), true); //TODO(JAF): Figure out what should be her
-            begin.clear();
-            begin.maxLength(255)
-                .setRemoteChannel(0)
-                .setNextOutgoingId(1)
-                .setIncomingWindow(0)
-                .setOutgoingWindow(0)
-                .setHandleMax(1024);
+            begin.wrap(sender.getBuffer(), frame.bodyOffset(), true) //.clear()
+                    .maxLength(255)
+                    .setRemoteChannel(0)
+                    .setNextOutgoingId(1)
+                    .setIncomingWindow(0)
+                    .setOutgoingWindow(0)
+                    .setHandleMax(1024);
             frame.bodyChanged();
-            sender.send(frame.limit());
+            session.send(frame, begin);
+
+
+
+            frame.setPerformative(FLOW);
+
+            Flow flow = Flow.LOCAL_REF.get();
+            flow.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .clear()
+                    .maxLength(255);
+            flow.setNextIncomingId(0)
+                    .setIncomingWindow(Integer.MAX_VALUE)
+                    .setNextOutgoingId(1)
+                    .setOutgoingWindow(0);
+            frame.bodyChanged();
+            session.send(frame, flow);
+        }
+
+        private static void whenEndReceived(Session<AmqpSession, AmqpLink> session, Frame frame, End end)
+        {
+            Sender sender = session.sender;
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(0)
+                    .setPerformative(END);
+            end.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .clear();
+            frame.bodyChanged();
+            session.send(frame, end);
         }
     }
 
@@ -496,5 +565,43 @@ public class AmqpAeronMikroSupport
                 return out.toString();
             }
         };
+    }
+
+
+    private static class AmqpMessage implements CanonicalMessage
+    {
+        private UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
+        private int offset;
+        private int length;
+
+        @Override
+        public UnsafeBuffer getBuffer()
+        {
+            return buffer;
+        }
+
+        @Override
+        public int getOffset()
+        {
+            return offset;
+        }
+
+        public AmqpMessage setOffset(int offset)
+        {
+            this.offset = offset;
+            return this;
+        }
+
+        @Override
+        public int getLength()
+        {
+            return length;
+        }
+
+        public AmqpMessage setLength(int length)
+        {
+            this.length = length;
+            return this;
+        }
     }
 }

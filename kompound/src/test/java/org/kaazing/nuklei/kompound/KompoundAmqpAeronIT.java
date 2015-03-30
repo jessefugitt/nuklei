@@ -95,6 +95,7 @@ public class KompoundAmqpAeronIT
         assertTrue(stopped.get());
     }
 
+
     @Test
     @Ignore
     @Specification("amqp/connection/connect.and.close")
@@ -120,6 +121,40 @@ public class KompoundAmqpAeronIT
                         break;
                     }
                 });
+
+        kompound = Kompound.startUp(builder);
+        waitToBeAttached();
+
+        // FIXME:  Upgrade to latest K3PO, use k3po.finish()
+        k3po.join();
+    }
+
+    @Test
+    @Ignore
+    @Specification({ "amqp/queue/create.queue.producer",
+            "amqp/queue/create.queue.consumer"})
+    public void shouldTransferMessageFromProducerToConsumer() throws Exception
+    {
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
+        Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
+
+        final Kompound.Builder builder = new Kompound.Builder()
+                .service(
+                        URI,
+                        (header, typeId, buffer, offset, length) ->
+                        {
+                            switch (typeId)
+                            {
+                                case TcpManagerTypeId.ATTACH_COMPLETED:
+                                    attached.lazySet(true);
+                                    break;
+                                case TcpManagerTypeId.NEW_CONNECTION:
+                                case TcpManagerTypeId.RECEIVED_DATA:
+                                case TcpManagerTypeId.EOF:
+                                    mikro.onMessage(header, typeId, buffer, offset, length);
+                                    break;
+                            }
+                        });
 
         kompound = Kompound.startUp(builder);
         waitToBeAttached();

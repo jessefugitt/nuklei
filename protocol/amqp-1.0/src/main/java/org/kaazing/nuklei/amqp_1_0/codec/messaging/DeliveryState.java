@@ -104,6 +104,8 @@ public enum DeliveryState
         public Described setDeliveryState(DeliveryState value)
         {
             setDescriptor(WRITE, value);
+            getComposite().maxLength(0).clear();
+            notifyChanged();
             return this;
         }
 

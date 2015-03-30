@@ -128,6 +128,17 @@ public final class Flow extends CompositeType
         return this;
     }
 
+    public Flow setNextIncomingId(long value)
+    {
+        nextIncomingId().set(value);
+        return this;
+    }
+
+    public long getNextIncomingId()
+    {
+        return nextIncomingId().get();
+    }
+
     public Flow setNextOutgoingId(long value)
     {
         nextOutgoingId().set(value);
