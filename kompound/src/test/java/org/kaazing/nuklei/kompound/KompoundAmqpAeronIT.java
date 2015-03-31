@@ -38,7 +38,7 @@ import org.kaazing.nuklei.protocol.tcp.TcpManagerTypeId;
 
 public class KompoundAmqpAeronIT
 {
-    public static final String URI = "tcp://localhost:5672";
+    public static final String URI = "tcp://0.0.0.0:5672";
 
     private final K3poRule k3po = new K3poRule().setScriptRoot("org/kaazing/k3po/scripts/nuklei/kompound");
 

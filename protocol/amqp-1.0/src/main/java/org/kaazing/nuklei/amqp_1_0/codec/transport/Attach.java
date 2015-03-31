@@ -18,10 +18,7 @@ package org.kaazing.nuklei.amqp_1_0.codec.transport;
 import java.util.function.Consumer;
 
 import org.kaazing.nuklei.Flyweight;
-import org.kaazing.nuklei.amqp_1_0.codec.definitions.Fields;
-import org.kaazing.nuklei.amqp_1_0.codec.definitions.ReceiverSettleMode;
-import org.kaazing.nuklei.amqp_1_0.codec.definitions.Role;
-import org.kaazing.nuklei.amqp_1_0.codec.definitions.SenderSettleMode;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.*;
 import org.kaazing.nuklei.amqp_1_0.codec.messaging.Source;
 import org.kaazing.nuklei.amqp_1_0.codec.messaging.Target;
 import org.kaazing.nuklei.amqp_1_0.codec.types.ArrayType;
@@ -61,7 +58,7 @@ public final class Attach extends CompositeType
     private final UByteType receiveSettleMode;
     private final Source source;
     private final Target target;
-    private final MapType unsettled;
+    private final Optional<MapType> unsettledField;
     private final BooleanType incompleteUnsettled;
     private final UIntType initialDeliveryCount;
     private final ULongType maxMessageSize;
@@ -99,7 +96,11 @@ public final class Attach extends CompositeType
         {
             limit(7, owner.limit());
         });
-        unsettled = new MapType().watch((owner) ->
+        MapType unsettled = new MapType().watch((owner) ->
+        {
+            limit(8, owner.limit());
+        });
+        unsettledField = new Optional<MapType>(unsettled).watch((owner) ->
         {
             limit(8, owner.limit());
         });
@@ -228,9 +229,19 @@ public final class Attach extends CompositeType
         return target();
     }
 
+    public boolean isUnsettledNull()
+    {
+        return unsettled().isNull();
+    }
+
+    public void setUnsettledNull()
+    {
+        unsettled().setNull();
+    }
+
     public MapType getUnsettled()
     {
-        return unsettled();
+        return unsettled().getType();
     }
 
     public Attach setIncompleteUnsettled(boolean value)
@@ -328,9 +339,9 @@ public final class Attach extends CompositeType
         return target.wrap(mutableBuffer(), source().limit(), true);
     }
 
-    private MapType unsettled()
+    private Optional<MapType> unsettled()
     {
-        return unsettled.wrap(buffer(), target().limit(), false);
+        return unsettledField.wrap(buffer(), target().limit(), true);
     }
 
     private BooleanType incompleteUnsettled()

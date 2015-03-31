@@ -67,8 +67,12 @@ public class Message extends Type
 
     private int limit;
 
+    private boolean payloadOnly;
+
     public Message()
     {
+        payloadOnly = false;
+
         header = new Header().watch((owner) ->
         {
             limit(owner.limit());
@@ -116,6 +120,18 @@ public class Message extends Type
 //        {
 //            limit(9, owner.limit());
 //        });
+    }
+
+    //TODO(JAF): This is a quick approach to getting payload only messages to work while still implementing full parsing
+    public Message setPayloadOnly(boolean payloadOnly)
+    {
+        this.payloadOnly = payloadOnly;
+        return this;
+    }
+
+    public boolean isPayloadOnly()
+    {
+        return payloadOnly;
     }
 
     @Override
@@ -209,8 +225,14 @@ public class Message extends Type
 
     private ULongType.Descriptor descriptor()
     {
-        //return descriptor.wrap(buffer(), offset(), true);
-        return descriptor.wrap(buffer(), applicationProperties().limit(), true);
+        if(isPayloadOnly())
+        {
+            return descriptor.wrap(buffer(), offset(), true);
+        }
+        else
+        {
+            return descriptor.wrap(buffer(), applicationProperties().limit(), true);
+        }
     }
 
     private AmqpValue value()
