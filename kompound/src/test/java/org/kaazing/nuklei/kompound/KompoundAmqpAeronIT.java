@@ -42,7 +42,7 @@ public class KompoundAmqpAeronIT
 
     private final K3poRule k3po = new K3poRule().setScriptRoot("org/kaazing/k3po/scripts/nuklei/kompound");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(120, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(20, SECONDS));
 
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout);
@@ -101,7 +101,8 @@ public class KompoundAmqpAeronIT
     @Specification("amqp/connection/connect.and.close")
     public void shouldConnectAndCloseAMQP() throws Exception
     {
-        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
+                AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_ONLY);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()
@@ -131,11 +132,12 @@ public class KompoundAmqpAeronIT
 
     @Test
     @Ignore
-    @Specification({ "amqp/queue/create.queue.producer",
-            "amqp/queue/create.queue.consumer"})
+    @Specification({ "amqp/queue/create.queue.qpid.producer",
+            "amqp/queue/create.queue.qpid.consumer"})
     public void shouldTransferMessageFromProducerToConsumer() throws Exception
     {
-        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
+                AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_ONLY);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()
@@ -175,7 +177,8 @@ public class KompoundAmqpAeronIT
     @Ignore
     public void shouldRunAMQPServerFor2Min() throws Exception
     {
-        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport();
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
+                AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_PROPERTIES_HEADER);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()

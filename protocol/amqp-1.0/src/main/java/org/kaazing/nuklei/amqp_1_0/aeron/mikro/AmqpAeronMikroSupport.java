@@ -54,16 +54,6 @@ import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 public class AmqpAeronMikroSupport
 {
     private static final int SEND_BUFFER_SIZE = 1024;
-    /*
-    public static final ThreadLocal<UnsafeBuffer> SEND_BUFFER = new ThreadLocal<UnsafeBuffer>()
-    {
-        @Override
-        protected UnsafeBuffer initialValue()
-        {
-            return new UnsafeBuffer(ByteBuffer.allocateDirect(SEND_BUFFER_SIZE));
-        }
-    };
-    */
 
     private final BiConsumer<String, CanonicalMessage> canonicalMessageHandler = new BiConsumer<String, CanonicalMessage>()
     {
@@ -102,35 +92,13 @@ public class AmqpAeronMikroSupport
                         );
 
                 frame.setLength(transfer.limit() - frame.offset());
-
-                //TODO(JAF): Figure out why different...
-                System.out.println(frame.limit() + " " + transfer.limit());
-
                 link.send(frame, transfer);
 
             }
-            //TODO(JAF): This is where aeron canonical messages will be passed from local publications
-            /*
-            // find the target session, get sendBuffer for said session, new Transfer frame to that session with
-            // just decoded Message body
-            sendFrame.wrap(sender.getBuffer(), sender.getOffset(), true)
-                    .setDataOffset(2)
-                    .setType(0)
-                    .setChannel(0)
-                    .setPerformative(TRANSFER);
-            sendTransfer.wrap(sender.getBuffer(), sendFrame.bodyOffset(), true)
-                    .setHandle(0)
-                    .setDeliveryId(0)
-                    .setDeliveryTag(WRITE_UTF_8, "\0")
-                    .setMessageFormat(0)
-                    .setSettled(true);
-            sendTransfer.getMessage()
-                    .setDescriptor(0x77L)
-                    .setValue(WRITE_UTF_8, messageString);
-            sendFrame.setLength(sendTransfer.limit() - sendFrame.offset());
-            */
-            //TODO(JAF): Lookup receiver link and send it
-            //receiverLink.send(sendFrame, sendTransfer);
+            else
+            {
+                System.out.println("No consumers for message on logical name: " + logicalName);
+            }
         }
     };
 
@@ -140,8 +108,16 @@ public class AmqpAeronMikroSupport
     private final Map<String, AmqpProducer> amqpProducerMap = new ConcurrentHashMap<String, AmqpProducer>();
     private final Map<String, AmqpConsumer> amqpConsumerMap = new ConcurrentHashMap<String, AmqpConsumer>();
 
-    public AmqpAeronMikroSupport()
+    //TODO(JAF): Remove this variable that toggles whether we support payload only messages or full messages
+    public enum ExpectedMessageLayout
     {
+        PAYLOAD_ONLY, PAYLOAD_PROPERTIES_HEADER;
+    }
+    private final ExpectedMessageLayout expectedMessageLayout;
+
+    public AmqpAeronMikroSupport(ExpectedMessageLayout expectedMessageLayout)
+    {
+        this.expectedMessageLayout = expectedMessageLayout;
         //TODO(JAF): This should probably only be started once
         aeronTransportAdapter.start();
     }
@@ -160,7 +136,8 @@ public class AmqpAeronMikroSupport
                 new ConnectionHandler<AmqpConnection, AmqpSession, AmqpLink>(
                         new AmqpSessionFactory(),
                         new SessionHandler<AmqpSession, AmqpLink>(
-                                new AmqpLinkFactory(amqpProducerMap, amqpConsumerMap, aeronTransportAdapter),
+                                new AmqpLinkFactory(amqpProducerMap, amqpConsumerMap, aeronTransportAdapter,
+                                        expectedMessageLayout),
                                 new LinkHandler<AmqpLink>()));
 
         AmqpMikroFactory<AmqpConnection, AmqpSession, AmqpLink> factory =
@@ -196,17 +173,21 @@ public class AmqpAeronMikroSupport
         protected Map<String, AmqpProducer> producerMap;
         protected Map<String, AmqpConsumer> consumerMap;
         protected AeronTransportAdapter aeronTransportAdapter;
+        protected ExpectedMessageLayout expectedMessageLayout;
         protected String linkAddress;
         public AmqpLink(Session<AmqpSession, AmqpLink> owner,
                         LinkStateMachine<AmqpLink> stateMachine,
                         Map<String, AmqpProducer> producerMap,
-                        Map<String, AmqpConsumer> consumerMap, AeronTransportAdapter aeronTransportAdapter)
+                        Map<String, AmqpConsumer> consumerMap,
+                        AeronTransportAdapter aeronTransportAdapter,
+                        ExpectedMessageLayout expectedMessageLayout)
         {
             super(stateMachine, owner.sender);
             this.parameter = this;
             this.producerMap = producerMap;
             this.consumerMap = consumerMap;
             this.aeronTransportAdapter = aeronTransportAdapter;
+            this.expectedMessageLayout = expectedMessageLayout;
         }
     }
 
@@ -240,20 +221,22 @@ public class AmqpAeronMikroSupport
         private final Map<String, AmqpProducer> localProducerMap;
         private final Map<String, AmqpConsumer> localConsumerMap;
         private final AeronTransportAdapter aeronTransportAdapter;
+        private final ExpectedMessageLayout expectedMessageLayout;
 
         public AmqpLinkFactory(Map<String, AmqpProducer> localProducerMap, Map<String, AmqpConsumer> localConsumerMap,
-                               AeronTransportAdapter aeronTransportAdapter)
+                               AeronTransportAdapter aeronTransportAdapter, ExpectedMessageLayout expectedMessageLayout)
         {
             this.localProducerMap = localProducerMap;
             this.localConsumerMap = localConsumerMap;
             this.aeronTransportAdapter = aeronTransportAdapter;
+            this.expectedMessageLayout = expectedMessageLayout;
         }
 
         @Override
         public Link<AmqpLink> newLink(Session<AmqpSession, AmqpLink> session)
         {
             return new AmqpLink(session, new LinkStateMachine<AmqpLink>(
-                    new AmqpLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter);
+                    new AmqpLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter, expectedMessageLayout);
                     //new LinkHooks<AmqpTestLink>()));
         }
     }
@@ -400,7 +383,8 @@ public class AmqpAeronMikroSupport
             // TODO: This should settle only when required based on the incoming settled state
             Sender sender = link.sender;
 
-            System.out.println("Received message transfer (handle " + transfer.getHandle() + ") on link (" + link + ")");
+            System.out.println("Received message transfer (handle " + transfer.getHandle() + ") on link with address (" +
+                    link.parameter.linkAddress + ")");
             //System.out.println("Original Buffer: " + toHex(sender.getBuffer().byteArray(), sender.getOffset(), 20));
 
             long handle = transfer.getHandle();
@@ -411,6 +395,13 @@ public class AmqpAeronMikroSupport
             // send transfer to other attached session
             org.kaazing.nuklei.amqp_1_0.codec.messaging.Message message = transfer.getMessage();
 
+            //TODO(JAF): This is an implementation workaround to support payload only messages at the moment
+            if(link.parameter.expectedMessageLayout == ExpectedMessageLayout.PAYLOAD_ONLY)
+            {
+                message.setPayloadOnly(true);
+            }
+
+
             // get the string out
             String messageString = message.getValue(READ_UTF_8);
             //TODO(JAF): Don't allocate new byte arrays like this
@@ -419,10 +410,7 @@ public class AmqpAeronMikroSupport
             MESSAGE.setOffset(0);
             MESSAGE.setLength(bytes.length);
 
-            System.out.println("Sending message to aeron transport from amqp address: " + link.parameter.linkAddress);
             link.parameter.aeronTransportAdapter.onRemoteMessageReceived(link.parameter.linkAddress, MESSAGE);
-            System.out.println("Message sent to aeron subscribers...");
-
 
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)

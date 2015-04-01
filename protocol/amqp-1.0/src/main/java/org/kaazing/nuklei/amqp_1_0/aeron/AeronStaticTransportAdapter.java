@@ -178,8 +178,8 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
                 message.setLength(length);
                 message.setHeader(header);
 
-                System.out.println("Received message on: " + physicalStream.getChannel() + " " +
-                        physicalStream.getStreamId() + " forwarding to topic: " + logicalName);
+                System.out.println("Received message on aeron (" + physicalStream.getChannel() + " " +
+                        physicalStream.getStreamId() + ") which is configured to send to logical name (" + logicalName + ")");
                 onLocalMessageReceived(logicalName, physicalStream, message);
             }
         };
