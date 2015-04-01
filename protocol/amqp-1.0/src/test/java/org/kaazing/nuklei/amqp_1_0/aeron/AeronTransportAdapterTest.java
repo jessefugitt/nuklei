@@ -46,11 +46,11 @@ public class AeronTransportAdapterTest
     @Test
     public void testLoadPropertiesFromFile() throws IOException
     {
-        //topic.ABC = udp://localhost:30123,10
+        //topic.ABC = udp://localhost:30123,10|udp://localhost:40123,10
         //topic.DEF = udp://localhost:30123,11
         String fileName = "test_publications.properties";
         Properties testProps = aeronStaticTransportAdapter.loadPropertiesFromFile(fileName);
-        assertEquals("udp://localhost:30123,10", testProps.getProperty("topic.ABC"));
+        assertEquals("udp://localhost:30123,10|udp://localhost:40123,10", testProps.getProperty("topic.ABC"));
         assertEquals("udp://localhost:30123,11", testProps.getProperty("topic.DEF"));
     }
 

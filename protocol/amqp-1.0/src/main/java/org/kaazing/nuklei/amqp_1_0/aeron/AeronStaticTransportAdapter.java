@@ -97,12 +97,16 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         while (e.hasMoreElements())
         {
             String logicalName = (String) e.nextElement();
-            String channelStream = publicationsProperties.getProperty(logicalName);
-            AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
-            logicalNameMapping.loadPublication(logicalName, physicalStream);
-            if(PROXY_CREATION_AT_STARTUP)
+            String publications = publicationsProperties.getProperty(logicalName);
+            String[] channelStreams = publications.split("\\|");
+            for(String channelStream : channelStreams)
             {
-                addProxyPublication(logicalName, physicalStream);
+                AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
+                logicalNameMapping.loadPublication(logicalName, physicalStream);
+                if (PROXY_CREATION_AT_STARTUP)
+                {
+                    addProxyPublication(logicalName, physicalStream);
+                }
             }
         }
 
@@ -111,13 +115,18 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         while (e.hasMoreElements())
         {
             String logicalName = (String) e.nextElement();
-            String channelStream = subscriptionsProperties.getProperty(logicalName);
-            AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
-            logicalNameMapping.loadSubscription(logicalName, physicalStream);
-            if(PROXY_CREATION_AT_STARTUP)
+            String subscriptions = subscriptionsProperties.getProperty(logicalName);
+            String[] channelStreams = subscriptions.split("\\|");
+            for(String channelStream : channelStreams)
             {
-                addProxySubscription(logicalName, physicalStream);
+                AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
+                logicalNameMapping.loadSubscription(logicalName, physicalStream);
+                if(PROXY_CREATION_AT_STARTUP)
+                {
+                    addProxySubscription(logicalName, physicalStream);
+                }
             }
+
         }
     }
 
