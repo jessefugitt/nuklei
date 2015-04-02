@@ -1,5 +1,6 @@
 package org.kaazing.nuklei.amqp_1_0.aeron;
 
+import org.kaazing.nuklei.amqp_1_0.api.CanonicalMessage;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
 import uk.co.real_logic.agrona.DirectBuffer;
 

@@ -17,8 +17,8 @@ import java.util.function.BiConsumer;
 
 import org.kaazing.nuklei.amqp_1_0.AmqpMikroFactory;
 import org.kaazing.nuklei.amqp_1_0.aeron.AeronStaticTransportAdapter;
-import org.kaazing.nuklei.amqp_1_0.aeron.AeronTransportAdapter;
-import org.kaazing.nuklei.amqp_1_0.aeron.CanonicalMessage;
+import org.kaazing.nuklei.amqp_1_0.api.ConnectionlessTransportAdapter;
+import org.kaazing.nuklei.amqp_1_0.api.CanonicalMessage;
 import org.kaazing.nuklei.amqp_1_0.codec.definitions.ReceiverSettleMode;
 import org.kaazing.nuklei.amqp_1_0.codec.definitions.Role;
 import org.kaazing.nuklei.amqp_1_0.codec.definitions.SenderSettleMode;
@@ -102,7 +102,7 @@ public class AmqpAeronMikroSupport
         }
     };
 
-    private final AeronTransportAdapter aeronTransportAdapter = new AeronStaticTransportAdapter(canonicalMessageHandler);
+    private final ConnectionlessTransportAdapter connectionlessTransportAdapter = new AeronStaticTransportAdapter();
 
     //TODO(JAF): Need to convert to multimap to support multiple producers/consumers with same logical address
     private final Map<String, AmqpProducer> amqpProducerMap = new ConcurrentHashMap<String, AmqpProducer>();
@@ -118,13 +118,14 @@ public class AmqpAeronMikroSupport
     public AmqpAeronMikroSupport(ExpectedMessageLayout expectedMessageLayout)
     {
         this.expectedMessageLayout = expectedMessageLayout;
+        connectionlessTransportAdapter.addLocalMessageReceivedListener(canonicalMessageHandler);
         //TODO(JAF): This should probably only be started once
-        aeronTransportAdapter.start();
+        connectionlessTransportAdapter.start();
     }
 
     public void close()
     {
-        aeronTransportAdapter.stop();
+        connectionlessTransportAdapter.stop();
     }
 
     public Mikro createAmqpAeronMikro()
@@ -136,7 +137,7 @@ public class AmqpAeronMikroSupport
                 new ConnectionHandler<AmqpConnection, AmqpSession, AmqpLink>(
                         new AmqpSessionFactory(),
                         new SessionHandler<AmqpSession, AmqpLink>(
-                                new AmqpLinkFactory(amqpProducerMap, amqpConsumerMap, aeronTransportAdapter,
+                                new AmqpLinkFactory(amqpProducerMap, amqpConsumerMap, connectionlessTransportAdapter,
                                         expectedMessageLayout),
                                 new LinkHandler<AmqpLink>()));
 
@@ -172,21 +173,21 @@ public class AmqpAeronMikroSupport
     {
         protected Map<String, AmqpProducer> producerMap;
         protected Map<String, AmqpConsumer> consumerMap;
-        protected AeronTransportAdapter aeronTransportAdapter;
+        protected ConnectionlessTransportAdapter connectionlessTransportAdapter;
         protected ExpectedMessageLayout expectedMessageLayout;
         protected String linkAddress;
         public AmqpLink(Session<AmqpSession, AmqpLink> owner,
                         LinkStateMachine<AmqpLink> stateMachine,
                         Map<String, AmqpProducer> producerMap,
                         Map<String, AmqpConsumer> consumerMap,
-                        AeronTransportAdapter aeronTransportAdapter,
+                        ConnectionlessTransportAdapter connectionlessTransportAdapter,
                         ExpectedMessageLayout expectedMessageLayout)
         {
             super(stateMachine, owner.sender);
             this.parameter = this;
             this.producerMap = producerMap;
             this.consumerMap = consumerMap;
-            this.aeronTransportAdapter = aeronTransportAdapter;
+            this.connectionlessTransportAdapter = connectionlessTransportAdapter;
             this.expectedMessageLayout = expectedMessageLayout;
         }
     }
@@ -220,15 +221,16 @@ public class AmqpAeronMikroSupport
     {
         private final Map<String, AmqpProducer> localProducerMap;
         private final Map<String, AmqpConsumer> localConsumerMap;
-        private final AeronTransportAdapter aeronTransportAdapter;
+        private final ConnectionlessTransportAdapter connectionlessTransportAdapter;
         private final ExpectedMessageLayout expectedMessageLayout;
 
         public AmqpLinkFactory(Map<String, AmqpProducer> localProducerMap, Map<String, AmqpConsumer> localConsumerMap,
-                               AeronTransportAdapter aeronTransportAdapter, ExpectedMessageLayout expectedMessageLayout)
+                               ConnectionlessTransportAdapter connectionlessTransportAdapter,
+                               ExpectedMessageLayout expectedMessageLayout)
         {
             this.localProducerMap = localProducerMap;
             this.localConsumerMap = localConsumerMap;
-            this.aeronTransportAdapter = aeronTransportAdapter;
+            this.connectionlessTransportAdapter = connectionlessTransportAdapter;
             this.expectedMessageLayout = expectedMessageLayout;
         }
 
@@ -236,7 +238,8 @@ public class AmqpAeronMikroSupport
         public Link<AmqpLink> newLink(Session<AmqpSession, AmqpLink> session)
         {
             return new AmqpLink(session, new LinkStateMachine<AmqpLink>(
-                    new AmqpLinkHooks()), localProducerMap, localConsumerMap, aeronTransportAdapter, expectedMessageLayout);
+                    new AmqpLinkHooks()), localProducerMap, localConsumerMap, connectionlessTransportAdapter,
+                    expectedMessageLayout);
                     //new LinkHooks<AmqpTestLink>()));
         }
     }
@@ -269,7 +272,7 @@ public class AmqpAeronMikroSupport
                 parameter.linkAddress = sourceAddress;
                 AmqpConsumer localConsumer = new AmqpConsumer(parameter.linkAddress, link, handle);
                 parameter.consumerMap.put(parameter.linkAddress, localConsumer);
-                parameter.aeronTransportAdapter.onRemoteConsumerDetected(parameter.linkAddress);
+                parameter.connectionlessTransportAdapter.onRemoteConsumerDetected(parameter.linkAddress, targetAddress);
                 gatewayRole = Role.SENDER;
             }
             else
@@ -277,7 +280,7 @@ public class AmqpAeronMikroSupport
                 parameter.linkAddress = targetAddress;
                 AmqpProducer localProducer = new AmqpProducer(parameter.linkAddress, link, handle);
                 parameter.producerMap.put(parameter.linkAddress, localProducer);
-                parameter.aeronTransportAdapter.onRemoteProducerDetected(parameter.linkAddress);
+                parameter.connectionlessTransportAdapter.onRemoteProducerDetected(parameter.linkAddress, sourceAddress);
 
                 gatewayRole = Role.RECEIVER;
             }
@@ -410,7 +413,7 @@ public class AmqpAeronMikroSupport
             MESSAGE.setOffset(0);
             MESSAGE.setLength(bytes.length);
 
-            link.parameter.aeronTransportAdapter.onRemoteMessageReceived(link.parameter.linkAddress, MESSAGE);
+            link.parameter.connectionlessTransportAdapter.onRemoteMessageReceived(link.parameter.linkAddress, MESSAGE);
 
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)

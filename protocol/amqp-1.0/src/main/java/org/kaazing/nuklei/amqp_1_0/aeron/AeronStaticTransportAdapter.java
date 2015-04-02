@@ -8,12 +8,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
+import org.kaazing.nuklei.amqp_1_0.api.CanonicalMessage;
+import org.kaazing.nuklei.amqp_1_0.api.ConnectionlessTransportAdapter;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
@@ -27,7 +30,7 @@ import uk.co.real_logic.agrona.concurrent.IdleStrategy;
 /**
  *
  */
-public class AeronStaticTransportAdapter implements AeronTransportAdapter
+public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapter
 {
     private static final boolean PROXY_CREATION_AT_STARTUP = AeronAdapterConfiguration.PROXY_CREATION_AT_STARTUP;
     private static final int FRAGMENT_COUNT_LIMIT = AeronAdapterConfiguration.FRAGMENT_COUNT_LIMIT;
@@ -55,17 +58,12 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     protected final AeronLogicalNameMapping logicalNameMapping = new AeronLogicalNameMapping();
     protected final Map<AeronPhysicalStream, Publication> proxyPublicationMap = new HashMap<>();
     protected final Map<AeronPhysicalStream, Subscription> proxySubscriptionsMap = new HashMap<>();
-    private BiConsumer<String, CanonicalMessage> messageHandler;
     final ExecutorService executor = Executors.newFixedThreadPool(1);
 
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy(
             100, 10, TimeUnit.MICROSECONDS.toNanos(1), TimeUnit.MICROSECONDS.toNanos(100));
-
-    public AeronStaticTransportAdapter(BiConsumer<String, CanonicalMessage> messageHandler)
-    {
-        this.messageHandler = messageHandler;
-    }
+    private final CopyOnWriteArrayList<BiConsumer<String, CanonicalMessage>> messageListeners = new CopyOnWriteArrayList<>();
 
     protected Properties loadPropertiesFromFile(String fileName) throws IOException
     {
@@ -87,7 +85,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     //TODO(JAF): This is just a quick implementation using properties files to load the static config
-    // It could be replaced by a more robust config option or a dynamic discovery option
+    // It could be replaced by a more robust config method or a dynamic discovery option
     protected void loadStaticProxyPublicationsAndSubscriptions() throws IOException
     {
         Properties publicationsProperties = loadPropertiesFromFile("publications.properties");
@@ -180,7 +178,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
 
                 System.out.println("Received message on aeron (" + physicalStream.getChannel() + " " +
                         physicalStream.getStreamId() + ") which is configured to send to logical name (" + logicalName + ")");
-                onLocalMessageReceived(logicalName, physicalStream, message);
+                onLocalMessageReceived(logicalName, message);
             }
         };
         System.out.println("Subscribing to: " + physicalStream.getChannel() + " " + physicalStream.getStreamId());
@@ -196,7 +194,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
             while (running.get())
             {
                 int fragmentsRead = 0;
-                //TODO(JAF): Keep the subscribers in a list so that we can iterate without garbage
+                //TODO(JAF): Keep the subscribers in a garbage free list so that we can iterate without garbage
                 for(Subscription subscription : proxySubscriptionsMap.values())
                 {
                     fragmentsRead += subscription.poll(FRAGMENT_COUNT_LIMIT);
@@ -231,7 +229,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     @Override
-    public void onRemoteProducerDetected(String logicalName)
+    public void onRemoteProducerDetected(String logicalName, String uniqueId)
     {
         if(PROXY_CREATION_AT_STARTUP)
         {
@@ -265,7 +263,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     @Override
-    public void onRemoteProducerRemoved(String logicalName)
+    public void onRemoteProducerRemoved(String logicalName, String uniqueId)
     {
         if(PROXY_CREATION_AT_STARTUP)
         {
@@ -275,6 +273,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         {
             //TODO(JAF): Typically you'd do some bookkeeping to track the number of remote producers
             // and then only remove the proxy publication when the count goes to 0 (often lazily or based on a timeout)
+            // or else you would have a different proxy publication per uniqueId
             List<AeronPhysicalStream> physicalStreams = logicalNameMapping.getPublications(logicalName);
             if(physicalStreams != null && physicalStreams.size() > 0)
             {
@@ -287,7 +286,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     @Override
-    public void onRemoteConsumerDetected(String logicalName)
+    public void onRemoteConsumerDetected(String logicalName, String uniqueId)
     {
         if(PROXY_CREATION_AT_STARTUP)
         {
@@ -321,7 +320,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
     }
 
     @Override
-    public void onRemoteConsumerRemoved(String logicalName)
+    public void onRemoteConsumerRemoved(String logicalName, String uniqueId)
     {
         if(PROXY_CREATION_AT_STARTUP)
         {
@@ -331,6 +330,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         {
             //TODO(JAF): Typically you'd do some bookkeeping to track the number of remote consumers
             // and then only remove the proxy subscription when the count goes to 0 (often lazily or based on a timeout)
+            // or else you would have a different proxy subscription per uniqueId
             List<AeronPhysicalStream> physicalStreams = logicalNameMapping.getSubscriptions(logicalName);
             if(physicalStreams != null && physicalStreams.size() > 0)
             {
@@ -340,30 +340,6 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
                 }
             }
         }
-    }
-
-    @Override
-    public void onLocalProducerDetected(AeronPhysicalStream physicalStream)
-    {
-        //In a static transport, there won't be events for the detection of local producers
-    }
-
-    @Override
-    public void onLocalProducerRemoved(AeronPhysicalStream physicalStream)
-    {
-        //In a static transport, there won't be events for the removal of local producers
-    }
-
-    @Override
-    public void onLocalConsumerDetected(AeronPhysicalStream physicalStream)
-    {
-        //In a static transport, there won't be events for the detection of local consumers
-    }
-
-    @Override
-    public void onLocalConsumerRemoved(AeronPhysicalStream physicalStream)
-    {
-        //In a static transport there won't be events for the removal of local consumers
     }
 
     @Override
@@ -382,7 +358,7 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
                             canonicalMessage.getLength());
                     //if(result == false)
                     //{
-                        //TODO(JAF): Add error handling on failure
+                    //TODO(JAF): Add error handling on failure
                     //}
                 }
             }
@@ -393,12 +369,49 @@ public class AeronStaticTransportAdapter implements AeronTransportAdapter
         }
     }
 
+    @Override
+    public void onLocalProducerDetected(String logicalName, String uniqueId)
+    {
+        //In a static transport, there won't be events for the detection of local producers
+    }
 
     @Override
-    public void onLocalMessageReceived(String logicalName, AeronPhysicalStream physicalStream, AeronMessage message)
+    public void onLocalProducerRemoved(String logicalName, String uniqueId)
     {
-        //TODO(JAF): Convert these messages and pass them out to the remote side using logicalName
-        messageHandler.accept(logicalName, message);
+        //In a static transport, there won't be events for the removal of local producers
+    }
+
+    @Override
+    public void onLocalConsumerDetected(String logicalName, String uniqueId)
+    {
+        //In a static transport, there won't be events for the detection of local consumers
+    }
+
+    @Override
+    public void onLocalConsumerRemoved(String logicalName, String uniqueId)
+    {
+        //In a static transport there won't be events for the removal of local consumers
+    }
+
+    @Override
+    public void addLocalMessageReceivedListener(BiConsumer<String, CanonicalMessage> messageHandler)
+    {
+        messageListeners.add(messageHandler);
+    }
+
+    @Override
+    public void removeLocalMessageReceivedListener(BiConsumer<String, CanonicalMessage> messageHandler)
+    {
+        messageListeners.remove(messageHandler);
+    }
+
+    @Override
+    public void onLocalMessageReceived(String logicalName, CanonicalMessage message)
+    {
+        for(BiConsumer<String, CanonicalMessage> messageListener : messageListeners)
+        {
+            messageListener.accept(logicalName, message);
+        }
     }
 
     //Use primarily for unit testing since Aeron is final and can't be mocked

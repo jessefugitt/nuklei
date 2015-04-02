@@ -6,9 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mapping class used to build up the list of logical names to physical streams for Aeron.  Can
- * be loaded with two properties files of the form:
- * "channel,stream = logical name"
+ * Mapping class used to build up the list of logical names to physical streams for Aeron.
  *
  */
 public class AeronLogicalNameMapping

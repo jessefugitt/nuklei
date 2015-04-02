@@ -12,18 +12,20 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import org.kaazing.nuklei.amqp_1_0.api.CanonicalMessage;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
 import uk.co.real_logic.agrona.DirectBuffer;
 import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 
-public class AeronTransportAdapterTest
+public class AeronStaticTransportAdapterTest
 {
     private AeronStaticTransportAdapter aeronStaticTransportAdapter;
     private int localMessageHandlerCount;
@@ -39,7 +41,8 @@ public class AeronTransportAdapterTest
                 localMessageHandlerCount++;
             }
         };
-        aeronStaticTransportAdapter = new AeronStaticTransportAdapter(testLocalMessageHandler);
+        aeronStaticTransportAdapter = new AeronStaticTransportAdapter();
+        aeronStaticTransportAdapter.addLocalMessageReceivedListener(testLocalMessageHandler);
         aeronStaticTransportAdapter.aeronWrapper = mock(AeronStaticTransportAdapter.AeronWrapper.class);
     }
 
@@ -109,7 +112,7 @@ public class AeronTransportAdapterTest
         when(aeronStaticTransportAdapter.aeronWrapper.addPublication(physicalStream.getChannel(),
                         physicalStream.getStreamId())).thenReturn(mockPublication);
 
-        aeronStaticTransportAdapter.onRemoteProducerDetected(logicalName);
+        aeronStaticTransportAdapter.onRemoteProducerDetected(logicalName, UUID.randomUUID().toString());
         verify(aeronStaticTransportAdapter.aeronWrapper).addPublication(physicalStream.getChannel(),
                 physicalStream.getStreamId());
 
@@ -133,22 +136,24 @@ public class AeronTransportAdapterTest
         when(aeronStaticTransportAdapter.aeronWrapper.addSubscription(eq(physicalStream.getChannel()),
                 eq(physicalStream.getStreamId()), any(DataHandler.class))).thenReturn(mockSubscription);
 
-        aeronStaticTransportAdapter.onRemoteConsumerDetected(logicalName);
+        aeronStaticTransportAdapter.onRemoteConsumerDetected(logicalName, UUID.randomUUID().toString());
         verify(aeronStaticTransportAdapter.aeronWrapper).addSubscription(eq(physicalStream.getChannel()),
                 eq(physicalStream.getStreamId()), any(DataHandler.class));
 
         int previousMessageHandlerCount = localMessageHandlerCount;
         assertEquals(0, previousMessageHandlerCount);
         AeronMessage mockMessage = mock(AeronMessage.class);
-        aeronStaticTransportAdapter.onLocalMessageReceived(logicalName, physicalStream, mockMessage);
+        aeronStaticTransportAdapter.onLocalMessageReceived(logicalName, mockMessage);
         assertEquals(previousMessageHandlerCount + 1, localMessageHandlerCount);
     }
 
     public static void main(String[] args) throws InterruptedException
     {
         final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
-        AeronStaticTransportAdapter adapter = new AeronStaticTransportAdapter(
-                (logicalName, message) -> System.out.println("Received message that maps back to logical name: " + logicalName));
+        AeronStaticTransportAdapter adapter = new AeronStaticTransportAdapter();
+        adapter.addLocalMessageReceivedListener(
+                (logicalName, message) -> System.out.println("Received message that maps back to logical name: " + logicalName)
+        );
 
         String payload = "Hello World!";
         byte[] payloadBytes = payload.getBytes();
@@ -157,7 +162,7 @@ public class AeronTransportAdapterTest
         adapter.start();
 
         //Simulate a remote producer
-        adapter.onRemoteProducerDetected("topic.ABC");
+        adapter.onRemoteProducerDetected("topic.ABC", UUID.randomUUID().toString());
         adapter.onRemoteMessageReceived("topic.ABC", new CanonicalMessage()
         {
             @Override

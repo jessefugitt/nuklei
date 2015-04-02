@@ -1,7 +1,9 @@
-package org.kaazing.nuklei.amqp_1_0.aeron;
+package org.kaazing.nuklei.amqp_1_0.api;
+
+import java.util.function.BiConsumer;
 
 /**
- * Defines interface needed to be a transport adapter in the gateway.
+ * Defines interface needed to be a connectionless transport adapter in the gateway.
  * The main abstractions are:
  * Local producers/consumers that are connected to this specific transport
  * Remote producers/consumers that are connected via a different transport (but will cause events to flow to/from this transport)
@@ -18,21 +20,27 @@ package org.kaazing.nuklei.amqp_1_0.aeron;
  * a combination of a static proxy configuration combined with corresponding configuration provided to local producers/consumers
  * can be an alternative to dynamic detection of local producers/consumers and eliminate the need to connect proxy to local.
  */
-public interface AeronTransportAdapter
+public interface ConnectionlessTransportAdapter
 {
 
-    void onRemoteProducerDetected(String logicalName);
-    void onRemoteProducerRemoved(String logicalName);
-    void onRemoteConsumerDetected(String logicalName);
-    void onRemoteConsumerRemoved(String logicalName);
-
-    void onLocalProducerDetected(AeronPhysicalStream physicalStream);
-    void onLocalProducerRemoved(AeronPhysicalStream physicalStream);
-    void onLocalConsumerDetected(AeronPhysicalStream physicalStream);
-    void onLocalConsumerRemoved(AeronPhysicalStream physicalStream);
+    void onRemoteProducerDetected(String logicalName, String uniqueId);
+    void onRemoteProducerRemoved(String logicalName, String uniqueId);
+    void onRemoteConsumerDetected(String logicalName, String uniqueId);
+    void onRemoteConsumerRemoved(String logicalName, String uniqueId);
 
     void onRemoteMessageReceived(String logicalName, CanonicalMessage canonicalMessage);
-    void onLocalMessageReceived(String logicalName, AeronPhysicalStream physicalStream, AeronMessage message);
+
+    //TODO(JAF): These should be used later with listeners to propagate events about local producers/consumers
+    void onLocalProducerDetected(String logicalName, String uniqueId);
+    void onLocalProducerRemoved(String logicalName, String uniqueId);
+    void onLocalConsumerDetected(String logicalName, String uniqueId);
+    void onLocalConsumerRemoved(String logicalName, String uniqueId);
+
+    void addLocalMessageReceivedListener(BiConsumer<String, CanonicalMessage> messageHandler);
+    void removeLocalMessageReceivedListener(BiConsumer<String, CanonicalMessage> messageHandler);
+
+    void onLocalMessageReceived(String logicalName, CanonicalMessage canonicalMessage);
+
 
     void start();
     void stop();
