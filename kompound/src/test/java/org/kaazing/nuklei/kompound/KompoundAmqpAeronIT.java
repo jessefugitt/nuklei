@@ -178,7 +178,7 @@ public class KompoundAmqpAeronIT
     public void shouldRunAMQPServerFor2Min() throws Exception
     {
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
-                AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_PROPERTIES_HEADER);
+                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()

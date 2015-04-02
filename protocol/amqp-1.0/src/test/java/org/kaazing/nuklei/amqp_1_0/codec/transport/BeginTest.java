@@ -29,6 +29,7 @@ import java.util.Random;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldAccessors.newAccessor;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldMutators.newMutator;
 import static uk.co.real_logic.agrona.BitUtil.fromHex;
@@ -70,22 +71,18 @@ public class BeginTest
     @Theory
     public void shouldDecode(int offset)
     {
-        //Example from QPID JMS 0.28 Producer connecting to a broker
-        buffer.putBytes(offset, fromHex("c0120540437000000800700000080070ffffffff"));
+        buffer.putBytes(offset, fromHex("c00d05600000520143437000000400"));
 
         Begin begin = new Begin();
         begin.wrap(buffer, offset, true);
 
-        assertEquals(18, begin.length());
+        assertEquals(13, begin.length());
 
-        //TODO: No way to check this value for null
-        //assertNull(begin.getRemoteChannel());
-        //assertEquals(Type.Kind.NULL, begin.getRemoteChannelType().kind());
-
-        assertEquals(0L, begin.getNextOutgoingId());
-        assertEquals(2048L, begin.getIncomingWindow());
-        assertEquals(2048L, begin.getOutgoingWindow());
-        assertEquals(4294967295L, begin.getHandleMax());
+        assertEquals(0L, begin.getRemoteChannel());
+        assertEquals(1L, begin.getNextOutgoingId());
+        assertEquals(0L, begin.getIncomingWindow());
+        assertEquals(0L, begin.getOutgoingWindow());
+        assertEquals(1024L, begin.getHandleMax());
     }
 
     @Theory
@@ -103,12 +100,46 @@ public class BeginTest
 
         assertEquals(13, begin.length());
 
-        //TODO: No way to check this value for null
-        //assertNull(begin.getRemoteChannel());
+        assertEquals(0L, begin.getRemoteChannel());
         assertEquals(1L, begin.getNextOutgoingId());
         assertEquals(0L, begin.getIncomingWindow());
         assertEquals(0L, begin.getOutgoingWindow());
         assertEquals(1024L, begin.getHandleMax());
+    }
+
+    @Theory
+    public void shouldEncodeWithNullRemoteChannel(int offset)
+    {
+        Begin begin = new Begin();
+
+        begin.wrap(buffer, offset, true)
+                .maxLength(255)
+                .setRemoteChannelNull()
+                .setNextOutgoingId(0L)
+                .setIncomingWindow(2048L)
+                .setOutgoingWindow(2048L)
+                .setHandleMax(4294967295L);
+
+        assertEquals(offset + 20, begin.limit());
+        assertEquals("c0120540437000000800700000080070ffffffff", toHex(buffer.byteArray(), offset, 20));
+    }
+
+    @Theory
+    public void shouldDecodeWithNullRemoteChannel(int offset)
+    {
+        //Example from QPID JMS 0.28 Producer connecting to a broker
+        buffer.putBytes(offset, fromHex("c0120540437000000800700000080070ffffffff"));
+
+        Begin begin = new Begin();
+        begin.wrap(buffer, offset, true);
+
+        assertEquals(18, begin.length());
+
+        assertTrue(begin.isRemoteChannelNull());
+        assertEquals(0L, begin.getNextOutgoingId());
+        assertEquals(2048L, begin.getIncomingWindow());
+        assertEquals(2048L, begin.getOutgoingWindow());
+        assertEquals(4294967295L, begin.getHandleMax());
     }
 }
 

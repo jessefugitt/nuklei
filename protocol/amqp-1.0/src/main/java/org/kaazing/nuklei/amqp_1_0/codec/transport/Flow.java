@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 
 import org.kaazing.nuklei.Flyweight;
 import org.kaazing.nuklei.amqp_1_0.codec.definitions.Fields;
+import org.kaazing.nuklei.amqp_1_0.codec.definitions.Optional;
 import org.kaazing.nuklei.amqp_1_0.codec.types.BooleanType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.CompositeType;
 import org.kaazing.nuklei.amqp_1_0.codec.types.UIntType;
@@ -47,7 +48,7 @@ public final class Flow extends CompositeType
     private final UIntType handle;
     private final UIntType deliveryCount;
     private final UIntType linkCredit;
-    private final UIntType available;
+    private final Optional<UIntType> availableField;
     private final BooleanType drain;
     private final BooleanType echo;
     private final Fields properties;
@@ -82,7 +83,11 @@ public final class Flow extends CompositeType
         {
             limit(7, owner.limit());
         });
-        available = new UIntType().watch((owner) ->
+        UIntType available = new UIntType().watch((owner) ->
+        {
+            limit(8, owner.limit());
+        });
+        availableField = new Optional<>(available).watch((owner) ->
         {
             limit(8, owner.limit());
         });
@@ -205,15 +210,25 @@ public final class Flow extends CompositeType
         return linkCredit().get();
     }
 
+    public boolean isAvailableNull()
+    {
+        return available().isNull();
+    }
+
+    public Flow setAvailableNull()
+    {
+        available().setNull();
+        return this;
+    }
     public Flow setAvailable(long value)
     {
-        available().set(value);
+        available().getType().set(value);
         return this;
     }
 
     public long getAvailable()
     {
-        return available().get();
+        return available().getType().get();
     }
 
     public Flow setDrain(boolean value)
@@ -278,9 +293,9 @@ public final class Flow extends CompositeType
         return linkCredit.wrap(mutableBuffer(), deliveryCount().limit(), true);
     }
 
-    private UIntType available()
+    private Optional<UIntType> available()
     {
-        return available.wrap(mutableBuffer(), linkCredit().limit(), true);
+        return availableField.wrap(mutableBuffer(), linkCredit().limit(), true);
     }
 
     private BooleanType drain()

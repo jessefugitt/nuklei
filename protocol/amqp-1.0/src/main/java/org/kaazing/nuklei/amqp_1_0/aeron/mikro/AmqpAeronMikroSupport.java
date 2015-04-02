@@ -111,7 +111,7 @@ public class AmqpAeronMikroSupport
     //TODO(JAF): Remove this variable that toggles whether we support payload only messages or full messages
     public enum ExpectedMessageLayout
     {
-        PAYLOAD_ONLY, PAYLOAD_PROPERTIES_HEADER;
+        PAYLOAD_ONLY, HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER;
     }
     private final ExpectedMessageLayout expectedMessageLayout;
 
@@ -246,8 +246,6 @@ public class AmqpAeronMikroSupport
 
     private static class AmqpLinkHooks extends LinkHooks<AmqpLink>
     {
-        //private static final Frame sendFrame = new Frame();
-        //private static final Transfer sendTransfer = new Transfer();
         private static final AmqpMessage MESSAGE = new AmqpMessage();
 
         public AmqpLinkHooks()

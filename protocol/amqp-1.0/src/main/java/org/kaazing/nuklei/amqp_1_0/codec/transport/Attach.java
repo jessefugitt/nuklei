@@ -234,9 +234,10 @@ public final class Attach extends CompositeType
         return unsettled().isNull();
     }
 
-    public void setUnsettledNull()
+    public Attach setUnsettledNull()
     {
         unsettled().setNull();
+        return this;
     }
 
     public MapType getUnsettled()
