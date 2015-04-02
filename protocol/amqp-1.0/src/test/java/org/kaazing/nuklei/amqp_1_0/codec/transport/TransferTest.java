@@ -32,8 +32,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertNotNull;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.kaazing.nuklei.amqp_1_0.codec.messaging.Performative.TRANSFER;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldAccessors.newAccessor;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldMutators.newMutator;
 import static uk.co.real_logic.agrona.BitUtil.fromHex;

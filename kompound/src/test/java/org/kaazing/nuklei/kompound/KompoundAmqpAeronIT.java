@@ -194,7 +194,6 @@ public class KompoundAmqpAeronIT
                                 case TcpManagerTypeId.NEW_CONNECTION:
                                 case TcpManagerTypeId.RECEIVED_DATA:
                                 case TcpManagerTypeId.EOF:
-                                    System.out.println("typeId is: " + typeId);
                                     mikro.onMessage(header, typeId, buffer, offset, length);
                                     break;
                             }
@@ -204,5 +203,44 @@ public class KompoundAmqpAeronIT
         waitToBeAttached();
 
         Thread.sleep(120000);
+    }
+
+    public static void main(String[] args) throws Exception
+    {
+        AtomicBoolean attached = new AtomicBoolean(false);
+        Kompound kompound;
+        AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
+                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER);
+        Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
+
+        final Kompound.Builder builder = new Kompound.Builder()
+                .service(
+                        URI,
+                        (header, typeId, buffer, offset, length) ->
+                        {
+                            switch (typeId)
+                            {
+                                case TcpManagerTypeId.ATTACH_COMPLETED:
+                                    attached.lazySet(true);
+                                    break;
+                                case TcpManagerTypeId.NEW_CONNECTION:
+                                case TcpManagerTypeId.RECEIVED_DATA:
+                                case TcpManagerTypeId.EOF:
+                                    mikro.onMessage(header, typeId, buffer, offset, length);
+                                    break;
+                            }
+                        });
+
+        kompound = Kompound.startUp(builder);
+        while (!attached.get())
+        {
+            Thread.sleep(10);
+        }
+
+        System.out.println("AMQP Aeron Kompound running...");
+        while(true)
+        {
+            Thread.sleep(1000);
+        }
     }
 }

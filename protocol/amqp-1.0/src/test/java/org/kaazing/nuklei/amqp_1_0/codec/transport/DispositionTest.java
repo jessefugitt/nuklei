@@ -31,7 +31,6 @@ import java.util.Random;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.kaazing.nuklei.amqp_1_0.codec.definitions.Role.RECEIVER;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldAccessors.newAccessor;
 import static org.kaazing.nuklei.amqp_1_0.codec.util.FieldMutators.newMutator;
