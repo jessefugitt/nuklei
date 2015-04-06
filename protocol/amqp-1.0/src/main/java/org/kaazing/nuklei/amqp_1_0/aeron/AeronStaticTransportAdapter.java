@@ -1,13 +1,10 @@
 package org.kaazing.nuklei.amqp_1_0.aeron;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,12 +17,17 @@ import org.kaazing.nuklei.amqp_1_0.api.ConnectionlessTransportAdapter;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
+import uk.co.real_logic.aeron.common.CommonContext;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
+import uk.co.real_logic.aeron.driver.MediaDriver;
+import uk.co.real_logic.agrona.CloseHelper;
 import uk.co.real_logic.agrona.DirectBuffer;
+import uk.co.real_logic.agrona.IoUtil;
 import uk.co.real_logic.agrona.concurrent.BackoffIdleStrategy;
 import uk.co.real_logic.agrona.concurrent.IdleStrategy;
-//import uk.co.real_logic.aeron.driver.MediaDriver;
+
+import static java.lang.System.setProperty;
 
 /**
  *
@@ -34,7 +36,7 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
 {
     private static final boolean PROXY_CREATION_AT_STARTUP = AeronAdapterConfiguration.PROXY_CREATION_AT_STARTUP;
     private static final int FRAGMENT_COUNT_LIMIT = AeronAdapterConfiguration.FRAGMENT_COUNT_LIMIT;
-    private static final boolean EMBEDDED_MEDIA_DRIVER = AeronAdapterConfiguration.EMBEDDED_MEDIA_DRIVER;
+    private static final boolean DISABLE_EMBEDDED_MEDIA_DRIVER = AeronAdapterConfiguration.DISABLE_EMBEDDED_MEDIA_DRIVER;
 
     private final ThreadLocal<AeronMessage> tlAeronMessage = new ThreadLocal<AeronMessage>()
     {
@@ -44,16 +46,9 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
             return new AeronMessage();
         }
     };
-    static
-    {
-        //TODO(JAF): If we add a dependency on aeron-driver then we can start the media driver in embedded mode
-        //final MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launch() : null;
-        if(EMBEDDED_MEDIA_DRIVER)
-        {
-            //MediaDriver.launch();
-        }
-    }
 
+    protected MediaDriver driver;
+    private String uniqueAeronDir;
     protected AeronWrapper aeronWrapper;
     protected final AeronLogicalNameMapping logicalNameMapping = new AeronLogicalNameMapping();
     protected final Map<AeronPhysicalStream, Publication> proxyPublicationMap = new HashMap<>();
@@ -131,7 +126,22 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
     @Override
     public void start()
     {
-        //final MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launch() : null;
+        //starts a unique embedded driver by default unless disabled
+        if(DISABLE_EMBEDDED_MEDIA_DRIVER)
+        {
+            System.out.println("Disabling embedded media driver");
+            driver = null;
+        }
+        else
+        {
+            uniqueAeronDir = IoUtil.tmpDirName() + "aeron" + File.separator + UUID.randomUUID().toString();
+            //TODO(JAF): Should really set instance variables of Aeron.Context and MediaDriver.Context once they work
+            setProperty(CommonContext.AERON_DIR_PROP_NAME, uniqueAeronDir);
+
+            System.out.println("Starting embedded media driver at dir: " + uniqueAeronDir);
+            driver = MediaDriver.launch();
+        }
+
         final Aeron.Context ctx = new Aeron.Context();
         Aeron aeron = Aeron.connect(ctx);
         aeronWrapper = new AeronWrapper(aeron);
@@ -153,6 +163,17 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         executor.shutdown();
         running.set(false);
         aeronWrapper.close();
+        CloseHelper.quietClose(driver);
+        if(uniqueAeronDir != null)
+        {
+            //TODO(JAF): Should really set instance variables of Aeron.Context and MediaDriver.Context once they work
+            System.clearProperty(CommonContext.AERON_DIR_PROP_NAME);
+        }
+
+        //if(Boolean.getBoolean(CommonContext.DIRS_DELETE_ON_EXIT_PROP_NAME))
+        //{
+            //TODO(JAF): If Aeron doesn't clean up the unique "aeron.dir" parent folder then we may need to do it here
+        //}
     }
 
 

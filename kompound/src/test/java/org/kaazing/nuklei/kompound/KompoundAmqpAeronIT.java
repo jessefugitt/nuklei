@@ -97,10 +97,10 @@ public class KompoundAmqpAeronIT
 
 
     @Test
-    @Ignore
     @Specification("amqp/connection/connect.and.close")
     public void shouldConnectAndCloseAMQP() throws Exception
     {
+        System.out.println("Testing shouldConnectAndCloseAMQP...");
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
                 AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_ONLY);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
@@ -120,7 +120,14 @@ public class KompoundAmqpAeronIT
                     case TcpManagerTypeId.EOF:
                         mikro.onMessage(header, typeId, buffer, offset, length);
                         break;
+                    case TcpManagerTypeId.NONE:
+                        if(header instanceof StopCmd)
+                        {
+                            amqpAeronMikroSupport.close();
+                        }
+                        break;
                     }
+
                 });
 
         kompound = Kompound.startUp(builder);
@@ -131,11 +138,12 @@ public class KompoundAmqpAeronIT
     }
 
     @Test
-    @Ignore
     @Specification({ "amqp/queue/create.queue.qpid.producer",
             "amqp/queue/create.queue.qpid.consumer"})
     public void shouldTransferMessageFromProducerToConsumer() throws Exception
     {
+        System.out.println("Testing shouldTransferMessageFromProducerToConsumer...");
+
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
                 AmqpAeronMikroSupport.ExpectedMessageLayout.PAYLOAD_ONLY);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
@@ -154,6 +162,12 @@ public class KompoundAmqpAeronIT
                                 case TcpManagerTypeId.RECEIVED_DATA:
                                 case TcpManagerTypeId.EOF:
                                     mikro.onMessage(header, typeId, buffer, offset, length);
+                                    break;
+                                case TcpManagerTypeId.NONE:
+                                    if(header instanceof StopCmd)
+                                    {
+                                        amqpAeronMikroSupport.close();
+                                    }
                                     break;
                             }
                         });
@@ -196,6 +210,12 @@ public class KompoundAmqpAeronIT
                                 case TcpManagerTypeId.EOF:
                                     mikro.onMessage(header, typeId, buffer, offset, length);
                                     break;
+                                case TcpManagerTypeId.NONE:
+                                    if(header instanceof StopCmd)
+                                    {
+                                        amqpAeronMikroSupport.close();
+                                    }
+                                    break;
                             }
                         });
 
@@ -227,6 +247,12 @@ public class KompoundAmqpAeronIT
                                 case TcpManagerTypeId.RECEIVED_DATA:
                                 case TcpManagerTypeId.EOF:
                                     mikro.onMessage(header, typeId, buffer, offset, length);
+                                    break;
+                                case TcpManagerTypeId.NONE:
+                                    if(header instanceof StopCmd)
+                                    {
+                                        amqpAeronMikroSupport.close();
+                                    }
                                     break;
                             }
                         });

@@ -43,7 +43,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <require.java.version>1.8+</require.java.version>
         <require.maven.version>3.0.4+</require.maven.version>
-		<aeron.version>0.1-SNAPSHOT</aeron.version>
+        <aeron.version>0.1-SNAPSHOT</aeron.version>
 
         <!-- animal sniffer does not yet support Java8, see MANIMALSNIFFER-45 -->
         <animal.sniffer.skip>true</animal.sniffer.skip>
@@ -69,6 +69,11 @@
         <dependency>
             <groupId>uk.co.real-logic</groupId>
             <artifactId>aeron-common</artifactId>
+            <version>${aeron.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>uk.co.real-logic</groupId>
+            <artifactId>aeron-driver</artifactId>
             <version>${aeron.version}</version>
         </dependency>
         <dependency>
