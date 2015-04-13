@@ -49,18 +49,19 @@ public class AeronStaticTransportAdapterTest
     @Test
     public void testLoadPropertiesFromFile() throws IOException
     {
-        //topic.ABC = udp://localhost:30123,10|udp://localhost:40123,10
-        //topic.DEF = udp://localhost:30123,11
+        //topic.ABC = aeron:udp?remote=127.0.0.1:30123|streamId=10;aeron:udp?remote=127.0.0.1:40123|streamId=10
+        //topic.DEF = aeron:udp?remote=127.0.0.1:30123|streamId=11
         String fileName = "test_publications.properties";
         Properties testProps = aeronStaticTransportAdapter.loadPropertiesFromFile(fileName);
-        assertEquals("udp://localhost:30123,10|udp://localhost:40123,10", testProps.getProperty("topic.ABC"));
-        assertEquals("udp://localhost:30123,11", testProps.getProperty("topic.DEF"));
+        assertEquals("aeron:udp?remote=127.0.0.1:30123|streamId=10;aeron:udp?remote=127.0.0.1:40123|streamId=10",
+                testProps.getProperty("topic.ABC"));
+        assertEquals("aeron:udp?remote=127.0.0.1:30123|streamId=11", testProps.getProperty("topic.DEF"));
     }
 
     @Test
     public void testAddDeleteProxyPublication()
     {
-        AeronPhysicalStream physicalStream = new AeronPhysicalStream("udp://localhost:30123,10", 99);
+        AeronPhysicalStream physicalStream = new AeronPhysicalStream("aeron:udp?remote=127.0.0.1:30123|streamId=99", 99);
         Publication mockPublication = mock(Publication.class);
         when(mockPublication.channel()).thenReturn(physicalStream.getChannel());
         when(mockPublication.streamId()).thenReturn(physicalStream.getStreamId());
@@ -81,7 +82,7 @@ public class AeronStaticTransportAdapterTest
     @Test
     public void testAddDeleteProxySubscription()
     {
-        AeronPhysicalStream physicalStream = new AeronPhysicalStream("udp://localhost:30123,10", 99);
+        AeronPhysicalStream physicalStream = new AeronPhysicalStream("aeron:udp?remote=127.0.0.1:30123|streamId=99", 99);
         Subscription mockSubscription = mock(Subscription.class);
         when(mockSubscription.channel()).thenReturn(physicalStream.getChannel());
         when(mockSubscription.streamId()).thenReturn(physicalStream.getStreamId());
@@ -103,7 +104,7 @@ public class AeronStaticTransportAdapterTest
     public void testOnRemoteMessageReceived()
     {
         String logicalName = "topic.test.1";
-        AeronPhysicalStream physicalStream = new AeronPhysicalStream("udp://localhost:30123,10", 99);
+        AeronPhysicalStream physicalStream = new AeronPhysicalStream("aeron:udp?remote=127.0.0.1:30123|streamId=99", 99);
         aeronStaticTransportAdapter.logicalNameMapping.loadPublication(logicalName, physicalStream);
 
         Publication mockPublication = mock(Publication.class);
@@ -127,7 +128,7 @@ public class AeronStaticTransportAdapterTest
     public void testOnLocalMessageReceived()
     {
         String logicalName = "topic.test.1";
-        AeronPhysicalStream physicalStream = new AeronPhysicalStream("udp://localhost:30123,10", 99);
+        AeronPhysicalStream physicalStream = new AeronPhysicalStream("aeron:udp?remote=127.0.0.1:30123|streamId=99", 99);
         aeronStaticTransportAdapter.logicalNameMapping.loadSubscription(logicalName, physicalStream);
 
         Subscription mockSubscription = mock(Subscription.class);

@@ -17,7 +17,6 @@ import org.kaazing.nuklei.amqp_1_0.api.ConnectionlessTransportAdapter;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
-import uk.co.real_logic.aeron.common.CommonContext;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
 import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
 import uk.co.real_logic.aeron.driver.MediaDriver;
@@ -26,8 +25,6 @@ import uk.co.real_logic.agrona.DirectBuffer;
 import uk.co.real_logic.agrona.IoUtil;
 import uk.co.real_logic.agrona.concurrent.BackoffIdleStrategy;
 import uk.co.real_logic.agrona.concurrent.IdleStrategy;
-
-import static java.lang.System.setProperty;
 
 /**
  *
@@ -91,7 +88,7 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         {
             String logicalName = (String) e.nextElement();
             String publications = publicationsProperties.getProperty(logicalName);
-            String[] channelStreams = publications.split("\\|");
+            String[] channelStreams = publications.split(";");
             for(String channelStream : channelStreams)
             {
                 AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
@@ -109,7 +106,7 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         {
             String logicalName = (String) e.nextElement();
             String subscriptions = subscriptionsProperties.getProperty(logicalName);
-            String[] channelStreams = subscriptions.split("\\|");
+            String[] channelStreams = subscriptions.split(";");
             for(String channelStream : channelStreams)
             {
                 AeronPhysicalStream physicalStream = AeronPhysicalStream.fromString(channelStream);
@@ -135,14 +132,19 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         else
         {
             uniqueAeronDir = IoUtil.tmpDirName() + "aeron" + File.separator + UUID.randomUUID().toString();
-            //TODO(JAF): Should really set instance variables of Aeron.Context and MediaDriver.Context once they work
-            setProperty(CommonContext.AERON_DIR_PROP_NAME, uniqueAeronDir);
-
             System.out.println("Starting embedded media driver at dir: " + uniqueAeronDir);
-            driver = MediaDriver.launch();
+            MediaDriver.Context driverContext = new MediaDriver.Context();
+            driverContext.dirName(uniqueAeronDir);
+            driverContext.dirsDeleteOnExit(true);
+            driver = MediaDriver.launch(driverContext);
         }
 
         final Aeron.Context ctx = new Aeron.Context();
+        if(uniqueAeronDir != null)
+        {
+            ctx.dirName(uniqueAeronDir);
+        }
+        ctx.dirsDeleteOnExit(true);
         Aeron aeron = Aeron.connect(ctx);
         aeronWrapper = new AeronWrapper(aeron);
         try
@@ -163,12 +165,10 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         executor.shutdown();
         running.set(false);
         aeronWrapper.close();
+
+        //TODO(JAF): Still need to figure out bug where Aeron won't clean up the configured dirName on exit
+        // due to file system exception that another process is using the directory
         CloseHelper.quietClose(driver);
-        if(uniqueAeronDir != null)
-        {
-            //TODO(JAF): Should really set instance variables of Aeron.Context and MediaDriver.Context once they work
-            System.clearProperty(CommonContext.AERON_DIR_PROP_NAME);
-        }
 
         //if(Boolean.getBoolean(CommonContext.DIRS_DELETE_ON_EXIT_PROP_NAME))
         //{

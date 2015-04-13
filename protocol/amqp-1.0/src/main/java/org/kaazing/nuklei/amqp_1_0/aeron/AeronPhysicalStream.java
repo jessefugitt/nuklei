@@ -1,12 +1,14 @@
 package org.kaazing.nuklei.amqp_1_0.aeron;
 
+import uk.co.real_logic.aeron.common.uri.AeronUri;
+
 /**
  *
  *
  */
 public class AeronPhysicalStream
 {
-    private final String channel; //ex: udp://localhost:40123
+    private final String channel; //ex: aeron:udp?remote=127.0.0.1:30123
     private final int streamId; // ex: 10
 
     public AeronPhysicalStream(String channel, int streamId)
@@ -25,13 +27,15 @@ public class AeronPhysicalStream
         return streamId;
     }
 
-    //TODO(JAF): Change to URI format instead of using comma to concatenate
-
     public static AeronPhysicalStream fromString(String channelStream)
     {
-        String[] tokens = channelStream.split(",");
-        String parsedChannel = tokens[0];
-        int parsedStreamId = tokens.length > 1 ? Integer.parseInt(tokens[1]) : 0;
-        return new AeronPhysicalStream(parsedChannel, parsedStreamId);
+        //channelStream looks like: aeron:udp?remote=127.0.0.1:30123|streamId=10
+        AeronUri aeronUri = AeronUri.parse(channelStream);
+        int parsedStreamId = 0;
+        if(aeronUri.get("streamId") != null)
+        {
+            parsedStreamId = Integer.parseInt(aeronUri.get("streamId"));
+        }
+        return new AeronPhysicalStream(channelStream, parsedStreamId);
     }
 }

@@ -39,6 +39,7 @@ import java.nio.charset.CharsetEncoder;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -198,6 +199,7 @@ public class KompoundAmqpIT
     }
 
     @Test
+    @Ignore
     @Specification({ "amqp/queue/create.queue.producer",
                      "amqp/queue/create.queue.consumer"})
     public void shouldTransferMessageFromProducerToConsumer() throws Exception
