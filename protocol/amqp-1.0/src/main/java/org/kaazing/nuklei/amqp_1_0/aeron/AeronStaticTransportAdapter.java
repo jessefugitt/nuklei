@@ -164,10 +164,25 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
     {
         executor.shutdown();
         running.set(false);
+        try
+        {
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+        for(Publication publication : proxyPublicationMap.values())
+        {
+            publication.close();
+        }
+        for(Subscription subscription : proxySubscriptionsMap.values())
+        {
+            subscription.close();
+        }
+
         aeronWrapper.close();
 
-        //TODO(JAF): Still need to figure out bug where Aeron won't clean up the configured dirName on exit
-        // due to file system exception that another process is using the directory
         CloseHelper.quietClose(driver);
 
         //if(Boolean.getBoolean(CommonContext.DIRS_DELETE_ON_EXIT_PROP_NAME))
