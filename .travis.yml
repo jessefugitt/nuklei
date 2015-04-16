@@ -1,6 +1,13 @@
 language: Java
 jdk:
   - oraclejdk8
+before_install:
+  - cd ..
+  - git clone git://github.com/real-logic/Aeron.git
+  - cd Aeron
+  - ./gradlew
+  - cd ..
+  - cd nuklei
 install: mvn -Pbootstrap verify
 script: mvn verify -DskipTests
 
