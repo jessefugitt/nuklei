@@ -144,7 +144,6 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         {
             ctx.dirName(uniqueAeronDir);
         }
-        ctx.dirsDeleteOnExit(true);
         Aeron aeron = Aeron.connect(ctx);
         aeronWrapper = new AeronWrapper(aeron);
         try
