@@ -389,7 +389,7 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
                 Publication publication = proxyPublicationMap.get(physicalStream);
                 if(publication != null)
                 {
-                    boolean result = publication.offer(canonicalMessage.getBuffer(), canonicalMessage.getOffset(),
+                    long result = publication.offer(canonicalMessage.getBuffer(), canonicalMessage.getOffset(),
                             canonicalMessage.getLength());
                     //if(result == false)
                     //{
