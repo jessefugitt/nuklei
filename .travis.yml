@@ -3,6 +3,10 @@ jdk:
   - oraclejdk8
 before_install:
   - cd ..
+  - git clone git://github.com/real-logic/Agrona.git
+  - cd Agrona
+  - ./gradlew
+  - cd ..
   - git clone git://github.com/real-logic/Aeron.git
   - cd Aeron
   - ./gradlew
