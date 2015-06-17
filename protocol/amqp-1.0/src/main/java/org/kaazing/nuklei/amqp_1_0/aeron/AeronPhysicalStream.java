@@ -1,6 +1,6 @@
 package org.kaazing.nuklei.amqp_1_0.aeron;
 
-import uk.co.real_logic.aeron.common.uri.AeronUri;
+import uk.co.real_logic.aeron.driver.uri.AeronUri;
 
 /**
  *

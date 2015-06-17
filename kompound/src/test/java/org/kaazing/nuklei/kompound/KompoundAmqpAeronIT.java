@@ -192,7 +192,7 @@ public class KompoundAmqpAeronIT
     public void shouldRunAMQPServerFor2Min() throws Exception
     {
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
-                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER);
+                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_APROPERTIES_PAYLOAD_FOOTER);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()
@@ -230,7 +230,7 @@ public class KompoundAmqpAeronIT
         AtomicBoolean attached = new AtomicBoolean(false);
         Kompound kompound;
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
-                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER);
+                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_APROPERTIES_PAYLOAD_FOOTER);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()

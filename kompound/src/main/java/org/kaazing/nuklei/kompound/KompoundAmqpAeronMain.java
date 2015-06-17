@@ -16,7 +16,8 @@ public class KompoundAmqpAeronMain
         AtomicBoolean attached = new AtomicBoolean(false);
         Kompound kompound;
         AmqpAeronMikroSupport amqpAeronMikroSupport = new AmqpAeronMikroSupport(
-                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER);
+                //AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_APROPERTIES_PAYLOAD_FOOTER);
+                AmqpAeronMikroSupport.ExpectedMessageLayout.HEADER_ANNOTATION_PROPERTIES_PAYLOAD);
         Mikro mikro = amqpAeronMikroSupport.createAmqpAeronMikro();
 
         final Kompound.Builder builder = new Kompound.Builder()

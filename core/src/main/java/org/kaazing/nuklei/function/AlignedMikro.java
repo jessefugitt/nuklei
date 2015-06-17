@@ -82,16 +82,34 @@ public interface AlignedMikro<T> extends StatefulMikro<T>
                 // propagate aligned frame(s)
                 onMessage(state, header, typeId, buffer, offset, alignedLength);
 
-                // retain partial frame for re-assembly
-                offset += alignedLength;
-                length -= alignedLength;
-                replayBuffer.putBytes(replayOffset, buffer, offset, length);
+                while(alignedLength < length)
+                {
+                    offset += alignedLength;
+                    length -= alignedLength;
 
-                replayOffset += length;
-                replayLimit = alignment.supply(state, header, typeId, replayBuffer,
-                        0, replayOffset);
-                replayStorage.offset(replayOffset);
-                replayStorage.limit(replayLimit);
+                    alignedLength = alignment.supply(state, header, typeId, buffer, offset, length);
+
+                    if (alignedLength == length || alignedLength < length)
+                    {
+                        // propagate aligned frame(s)
+                        onMessage(state, header, typeId, buffer, offset, length);
+                    }
+                }
+
+                if(alignedLength < length)
+                {
+                    // retain partial frame for re-assembly
+                    offset += alignedLength;
+                    length -= alignedLength;
+                    replayBuffer.putBytes(replayOffset, buffer, offset, length);
+
+                    replayOffset += length;
+                    replayLimit = alignment.supply(state, header, typeId, replayBuffer,
+                            0, replayOffset);
+                    replayStorage.offset(replayOffset);
+                    replayStorage.limit(replayLimit);
+                }
+
             }
             else
             {

@@ -21,7 +21,7 @@ import org.junit.Test;
 import org.kaazing.nuklei.amqp_1_0.api.CanonicalMessage;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
-import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
+import uk.co.real_logic.aeron.logbuffer.FragmentHandler;
 import uk.co.real_logic.agrona.DirectBuffer;
 import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 
@@ -86,12 +86,15 @@ public class AeronStaticTransportAdapterTest
         Subscription mockSubscription = mock(Subscription.class);
         when(mockSubscription.channel()).thenReturn(physicalStream.getChannel());
         when(mockSubscription.streamId()).thenReturn(physicalStream.getStreamId());
+        SubscriptionWrapper mockSubscriptionWrapper = mock(SubscriptionWrapper.class);
+        when(mockSubscriptionWrapper.getSubscription()).thenReturn(mockSubscription);
+
         when(aeronStaticTransportAdapter.aeronWrapper.addSubscription(eq(physicalStream.getChannel()),
-                        eq(physicalStream.getStreamId()), any(DataHandler.class))).thenReturn(mockSubscription);
+                eq(physicalStream.getStreamId()), any(FragmentHandler.class))).thenReturn(mockSubscriptionWrapper);
 
         aeronStaticTransportAdapter.addProxySubscription("topic.test.1", physicalStream);
         verify(aeronStaticTransportAdapter.aeronWrapper).addSubscription(eq(physicalStream.getChannel()),
-                eq(physicalStream.getStreamId()), any(DataHandler.class));
+                eq(physicalStream.getStreamId()), any(FragmentHandler.class));
 
         Subscription proxySubscription = aeronStaticTransportAdapter.deleteProxySubscription(physicalStream);
         assertNotNull(proxySubscription);
@@ -134,12 +137,15 @@ public class AeronStaticTransportAdapterTest
         Subscription mockSubscription = mock(Subscription.class);
         when(mockSubscription.channel()).thenReturn(physicalStream.getChannel());
         when(mockSubscription.streamId()).thenReturn(physicalStream.getStreamId());
+        SubscriptionWrapper mockSubscriptionWrapper = mock(SubscriptionWrapper.class);
+        when(mockSubscriptionWrapper.getSubscription()).thenReturn(mockSubscription);
+
         when(aeronStaticTransportAdapter.aeronWrapper.addSubscription(eq(physicalStream.getChannel()),
-                eq(physicalStream.getStreamId()), any(DataHandler.class))).thenReturn(mockSubscription);
+                eq(physicalStream.getStreamId()), any(FragmentHandler.class))).thenReturn(mockSubscriptionWrapper);
 
         aeronStaticTransportAdapter.onRemoteConsumerDetected(logicalName, UUID.randomUUID().toString());
         verify(aeronStaticTransportAdapter.aeronWrapper).addSubscription(eq(physicalStream.getChannel()),
-                eq(physicalStream.getStreamId()), any(DataHandler.class));
+                eq(physicalStream.getStreamId()), any(FragmentHandler.class));
 
         int previousMessageHandlerCount = localMessageHandlerCount;
         assertEquals(0, previousMessageHandlerCount);

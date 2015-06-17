@@ -17,9 +17,9 @@ import org.kaazing.nuklei.amqp_1_0.api.ConnectionlessTransportAdapter;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.Publication;
 import uk.co.real_logic.aeron.Subscription;
-import uk.co.real_logic.aeron.common.concurrent.logbuffer.DataHandler;
-import uk.co.real_logic.aeron.common.concurrent.logbuffer.Header;
 import uk.co.real_logic.aeron.driver.MediaDriver;
+import uk.co.real_logic.aeron.logbuffer.FragmentHandler;
+import uk.co.real_logic.aeron.logbuffer.Header;
 import uk.co.real_logic.agrona.CloseHelper;
 import uk.co.real_logic.agrona.DirectBuffer;
 import uk.co.real_logic.agrona.IoUtil;
@@ -49,7 +49,7 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
     protected AeronWrapper aeronWrapper;
     protected final AeronLogicalNameMapping logicalNameMapping = new AeronLogicalNameMapping();
     protected final Map<AeronPhysicalStream, Publication> proxyPublicationMap = new HashMap<>();
-    protected final Map<AeronPhysicalStream, Subscription> proxySubscriptionsMap = new HashMap<>();
+    protected final Map<AeronPhysicalStream, SubscriptionWrapper> proxySubscriptionsMap = new HashMap<>();
     final ExecutorService executor = Executors.newFixedThreadPool(1);
 
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -175,9 +175,9 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         {
             publication.close();
         }
-        for(Subscription subscription : proxySubscriptionsMap.values())
+        for(SubscriptionWrapper subscriptionWrapper : proxySubscriptionsMap.values())
         {
-            subscription.close();
+            subscriptionWrapper.getSubscription().close();
         }
 
         aeronWrapper.close();
@@ -199,10 +199,10 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
 
     protected void addProxySubscription(String logicalName, AeronPhysicalStream physicalStream)
     {
-        DataHandler dataHandler = new DataHandler()
+        FragmentHandler dataHandler = new FragmentHandler()
         {
             @Override
-            public void onData(DirectBuffer buffer, int offset, int length, Header header)
+            public void onFragment(DirectBuffer buffer, int offset, int length, Header header)
             {
                 //TODO(JAF): Don't create a new object here but maybe there is a better way than thread local
                 AeronMessage message = tlAeronMessage.get();
@@ -217,9 +217,9 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
             }
         };
         System.out.println("Subscribing to: " + physicalStream.getChannel() + " " + physicalStream.getStreamId());
-        Subscription subscription = aeronWrapper.addSubscription(
+        SubscriptionWrapper subscriptionWrapper = aeronWrapper.addSubscription(
                 physicalStream.getChannel(), physicalStream.getStreamId(), dataHandler);
-        proxySubscriptionsMap.put(physicalStream, subscription);
+        proxySubscriptionsMap.put(physicalStream, subscriptionWrapper);
     }
 
     public void pollSubscribers()
@@ -230,9 +230,10 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
             {
                 int fragmentsRead = 0;
                 //TODO(JAF): Keep the subscribers in a garbage free list so that we can iterate without garbage
-                for(Subscription subscription : proxySubscriptionsMap.values())
+                for(SubscriptionWrapper subscriptionWrapper : proxySubscriptionsMap.values())
                 {
-                    fragmentsRead += subscription.poll(FRAGMENT_COUNT_LIMIT);
+                    fragmentsRead += subscriptionWrapper.getSubscription().poll(subscriptionWrapper.getDataHandler(),
+                            FRAGMENT_COUNT_LIMIT);
                 }
                 idleStrategy.idle(fragmentsRead);
             }
@@ -255,9 +256,11 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
 
     public Subscription deleteProxySubscription(AeronPhysicalStream physicalStream)
     {
-        Subscription subscription = proxySubscriptionsMap.remove(physicalStream);
-        if(subscription != null)
+        SubscriptionWrapper subscriptionWrapper = proxySubscriptionsMap.remove(physicalStream);
+        Subscription subscription = null;
+        if(subscriptionWrapper != null)
         {
+            subscription = subscriptionWrapper.getSubscription();
             subscription.close();
         }
         return subscription;
@@ -335,8 +338,8 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
             {
                 for(AeronPhysicalStream physicalStream : physicalStreams)
                 {
-                    Subscription subscription = proxySubscriptionsMap.get(physicalStream);
-                    if(subscription != null)
+                    SubscriptionWrapper subscriptionWrapper = proxySubscriptionsMap.get(physicalStream);
+                    if(subscriptionWrapper != null)
                     {
                         //Log that we already have this proxy publication mapped for this logical name
                     }
@@ -457,9 +460,9 @@ public class AeronStaticTransportAdapter implements ConnectionlessTransportAdapt
         {
             this.aeron = aeron;
         }
-        public Subscription addSubscription(String channel, int streamId, DataHandler dataHandler)
+        public SubscriptionWrapper addSubscription(String channel, int streamId, FragmentHandler dataHandler)
         {
-            return aeron.addSubscription(channel, streamId, dataHandler);
+            return new SubscriptionWrapper(aeron.addSubscription(channel, streamId), dataHandler);
         }
         public Publication addPublication(String channel, int streamId)
         {

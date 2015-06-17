@@ -12,6 +12,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 
@@ -53,6 +54,9 @@ import uk.co.real_logic.agrona.concurrent.UnsafeBuffer;
 
 public class AmqpAeronMikroSupport
 {
+    //TODO(JAF): Change this to a connection specific value
+    private static AtomicInteger globalRemoteChannelCtr = new AtomicInteger(0);
+
     private static final int SEND_BUFFER_SIZE = 1024;
 
     private final BiConsumer<String, CanonicalMessage> canonicalMessageHandler = new BiConsumer<String, CanonicalMessage>()
@@ -77,7 +81,7 @@ public class AmqpAeronMikroSupport
                 frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                         .setDataOffset(2)
                         .setType(0)
-                        .setChannel(0)
+                        .setChannel(link.parameter.owner.getRemoteChannel())
                         .setPerformative(TRANSFER);
                 transfer.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                         .setHandle(consumer.handle)
@@ -111,7 +115,7 @@ public class AmqpAeronMikroSupport
     //TODO(JAF): Remove this variable that toggles whether we support payload only messages or full messages
     public enum ExpectedMessageLayout
     {
-        PAYLOAD_ONLY, HEADER_ANNOTATION_PROPERTIES_PAYLOAD_FOOTER;
+        PAYLOAD_ONLY, HEADER_ANNOTATION_PROPERTIES_APROPERTIES_PAYLOAD_FOOTER, HEADER_ANNOTATION_PROPERTIES_PAYLOAD;
     }
     private final ExpectedMessageLayout expectedMessageLayout;
 
@@ -161,11 +165,22 @@ public class AmqpAeronMikroSupport
 
     private class AmqpSession extends Session<AmqpSession, AmqpLink>
     {
+        private int remoteChannel;
         AmqpSession(Connection<AmqpConnection, AmqpSession, AmqpLink> owner,
                     SessionStateMachine<AmqpSession, AmqpLink> stateMachine)
         {
             super(stateMachine, owner.sender);
             this.parameter = this;
+        }
+
+        public void setRemoteChannel(int remoteChannel)
+        {
+            this.remoteChannel = remoteChannel;
+        }
+
+        public int getRemoteChannel()
+        {
+            return remoteChannel;
         }
     }
 
@@ -176,6 +191,7 @@ public class AmqpAeronMikroSupport
         protected ConnectionlessTransportAdapter connectionlessTransportAdapter;
         protected ExpectedMessageLayout expectedMessageLayout;
         protected String linkAddress;
+        protected AmqpSession owner;
         public AmqpLink(Session<AmqpSession, AmqpLink> owner,
                         LinkStateMachine<AmqpLink> stateMachine,
                         Map<String, AmqpProducer> producerMap,
@@ -189,6 +205,7 @@ public class AmqpAeronMikroSupport
             this.consumerMap = consumerMap;
             this.connectionlessTransportAdapter = connectionlessTransportAdapter;
             this.expectedMessageLayout = expectedMessageLayout;
+            this.owner = owner.parameter;
         }
     }
 
@@ -287,7 +304,7 @@ public class AmqpAeronMikroSupport
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                   .setDataOffset(2)
                   .setType(0)
-                  .setChannel(0)
+                  .setChannel(parameter.owner.getRemoteChannel())
                   .setPerformative(ATTACH);
             attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                   .maxLength(255)
@@ -369,7 +386,7 @@ public class AmqpAeronMikroSupport
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
-                    .setChannel(0)
+                    .setChannel(link.parameter.owner.getRemoteChannel())
                     .setPerformative(DETACH);
             detach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                     .maxLength(255)
@@ -392,7 +409,7 @@ public class AmqpAeronMikroSupport
             long deliveryId = transfer.getDeliveryId();
             String deliveryTag = transfer.getDeliveryTag(READ_UTF_8);
             long format = transfer.getMessageFormat();
-            boolean settled = transfer.getSettled();
+            //boolean settled = transfer.getSettled();
             // send transfer to other attached session
             org.kaazing.nuklei.amqp_1_0.codec.messaging.Message message = transfer.getMessage();
 
@@ -416,7 +433,7 @@ public class AmqpAeronMikroSupport
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
-                    .setChannel(0)
+                    .setChannel(link.parameter.owner.getRemoteChannel())
                     .setPerformative(DISPOSITION);
             Disposition disposition = Disposition.LOCAL_REF.get();
             disposition.wrap(sender.getBuffer(), frame.bodyOffset(), true)
@@ -533,20 +550,38 @@ public class AmqpAeronMikroSupport
         public AmqpSessionHooks()
         {
             whenBeginReceived = AmqpSessionHooks::whenBeginReceived;
+            whenFlowReceived = AmqpSessionHooks::whenFlowReceived;
             this.whenEndReceived = AmqpSessionHooks::whenEndReceived;
+        }
+
+        private static void whenFlowReceived(Session<AmqpSession, AmqpLink> session, Frame frame, Flow flow)
+        {
+            //System.out.println("Flow received from session with remove channel: " + session.parameter.getRemoteChannel());
         }
 
         private static void whenBeginReceived(Session<AmqpSession, AmqpLink> session, Frame frame, Begin begin)
         {
+            int remoteChannel = 0;
+            if(begin.isRemoteChannelNull())
+            {
+                remoteChannel = globalRemoteChannelCtr.getAndIncrement();
+            }
+            else
+            {
+                remoteChannel = (int) begin.getRemoteChannel();
+            }
+
+            session.parameter.setRemoteChannel(remoteChannel);
+
             Sender sender = session.sender;
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
-                    .setChannel(0)
+                    .setChannel(session.parameter.getRemoteChannel())
                     .setPerformative(BEGIN);
             begin.wrap(sender.getBuffer(), frame.bodyOffset(), true) //.clear()
                     .maxLength(255)
-                    .setRemoteChannel(0)
+                    .setRemoteChannel(session.parameter.getRemoteChannel())
                     .setNextOutgoingId(1)
                     .setIncomingWindow(0)
                     .setOutgoingWindow(0)
@@ -576,7 +611,7 @@ public class AmqpAeronMikroSupport
             frame.wrap(sender.getBuffer(), sender.getOffset(), true)
                     .setDataOffset(2)
                     .setType(0)
-                    .setChannel(0)
+                    .setChannel(session.parameter.getRemoteChannel())
                     .setPerformative(END);
             end.wrap(sender.getBuffer(), frame.bodyOffset(), true)
                     .clear();

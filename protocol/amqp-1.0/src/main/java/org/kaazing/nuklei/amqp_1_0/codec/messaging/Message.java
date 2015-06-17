@@ -231,7 +231,8 @@ public class Message extends Type
         }
         else
         {
-            return descriptor.wrap(buffer(), applicationProperties().limit(), true);
+            //return descriptor.wrap(buffer(), applicationProperties().limit(), true); //legacty qpid jms client
+            return descriptor.wrap(buffer(), properties().limit(), true); //new qpid jms client
         }
     }
 
