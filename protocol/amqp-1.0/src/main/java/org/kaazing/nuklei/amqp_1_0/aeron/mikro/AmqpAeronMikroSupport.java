@@ -279,7 +279,114 @@ public class AmqpAeronMikroSupport
             AmqpLink parameter = link.parameter;
             String attachName = attach.getName(READ_UTF_8);
             String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
+            String targetAddress = "";
+
+            long handle = attach.getHandle();
+
+            if (attach.getRole() == Role.RECEIVER)
+            {
+                parameter.linkAddress = sourceAddress;
+                AmqpConsumer localConsumer = new AmqpConsumer(parameter.linkAddress, link, handle);
+                parameter.consumerMap.put(parameter.linkAddress, localConsumer);
+                parameter.connectionlessTransportAdapter.onRemoteConsumerDetected(parameter.linkAddress, targetAddress);
+                gatewayRole = Role.SENDER;
+            }
+            else
+            {
+                targetAddress = attach.getTarget().getAddress(READ_UTF_8);
+                parameter.linkAddress = targetAddress;
+                AmqpProducer localProducer = new AmqpProducer(parameter.linkAddress, link, handle);
+                parameter.producerMap.put(parameter.linkAddress, localProducer);
+                parameter.connectionlessTransportAdapter.onRemoteProducerDetected(parameter.linkAddress, sourceAddress);
+
+                gatewayRole = Role.RECEIVER;
+            }
+
+            Sender sender = link.sender;
+            frame.wrap(sender.getBuffer(), sender.getOffset(), true)
+                    .setDataOffset(2)
+                    .setType(0)
+                    .setChannel(parameter.owner.getRemoteChannel())
+                    .setPerformative(ATTACH);
+            attach.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                    .maxLength(255)
+                    .setName(WRITE_UTF_8, attachName)
+                    .setHandle(handle)
+                    .setRole(gatewayRole)
+                    .setSendSettleMode(SenderSettleMode.MIXED)
+                    .setReceiveSettleMode(ReceiverSettleMode.FIRST);
+
+            if(gatewayRole == Role.RECEIVER)
+            {
+                attach.getSource()
+                        .setDescriptor()
+                        .maxLength(255)
+                        .setAddress(WRITE_UTF_8, sourceAddress)
+                        .setDurable(TerminusDurability.NONE)
+                        .setExpiryPolicy(TerminusExpiryPolicy.SESSION_END) //.setExpiryPolicy(TerminusExpiryPolicy.LINK_DETACH);
+                        .setTimeout(0L)
+                        .setDynamic(false)
+                        .setDynamicNodePropertiesNull()
+                        .setDistributionModeNull()
+                        .setFilterNull()
+                        .getDefaultOutcome().setDeliveryState(Outcome.ACCEPTED).getComposite().maxLength(0).clear();
+                attach.getTarget()
+                        .setDescriptor()
+                        .maxLength(255)
+                        .setAddress(WRITE_UTF_8, targetAddress);
+            }
+            else
+            {
+                attach.getSource()
+                        .setDescriptor()
+                        .maxLength(255)
+                        .setAddress(WRITE_UTF_8, sourceAddress)
+                        .setDurable(TerminusDurability.NONE)
+                        .setExpiryPolicy(TerminusExpiryPolicy.LINK_DETACH);
+
+                attach.getTarget()
+                        .setDescriptor()
+                        .maxLength(255)
+                        .setAddress(WRITE_UTF_8, targetAddress);
+
+                attach.setUnsettledNull();
+                attach.setIncompleteUnsettled(false);
+                attach.setInitialDeliveryCount(0);
+
+            }
+
+            frame.bodyChanged();
+            link.send(frame, attach);
+
+            if(gatewayRole == Role.RECEIVER)
+            {
+                frame.setPerformative(FLOW);
+                Flow flow = Flow.LOCAL_REF.get();
+                flow.wrap(sender.getBuffer(), frame.bodyOffset(), true)
+                        .clear()
+                        .maxLength(255);
+                flow.setNextIncomingId(0)
+                        .setIncomingWindow(Integer.MAX_VALUE)
+                        .setNextOutgoingId(1)
+                        .setOutgoingWindow(0)
+                        .setHandle(0)
+                        .setDeliveryCount(0)
+                        .setLinkCredit(1000);
+                frame.bodyChanged();
+                link.send(frame, flow);
+            }
+        }
+
+        /*
+        private static void whenAttachReceivedQpidLegacy(Link<AmqpLink> link, Frame frame, Attach attach)
+        {
+
+            Role gatewayRole = null;
+            AmqpLink parameter = link.parameter;
+            String attachName = attach.getName(READ_UTF_8);
+            String sourceAddress = attach.getSource().getAddress(READ_UTF_8);
             String targetAddress = attach.getTarget().getAddress(READ_UTF_8);
+
             long handle = attach.getHandle();
 
             if (attach.getRole() == Role.RECEIVER)
@@ -373,10 +480,8 @@ public class AmqpAeronMikroSupport
                 frame.bodyChanged();
                 link.send(frame, flow);
             }
-
-
-
         }
+        */
 
         private static void whenDetachReceived(Link<AmqpLink> link, Frame frame, Detach detach)
         {

@@ -9,6 +9,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class KompoundAmqpAeronMain
 {
+    //These should be added to the kaazing gateway
+    //<env.java.naming.factory.initial>org.apache.qpid.jms.jndi.JmsInitialContextFactory</env.java.naming.factory.initial>
+    //<env.connectionfactory.ConnectionFactory>amqp://kompoundamqpIP:5672?amqp.saslLayer=false</env.connectionfactory
+
     public static final String URI = "tcp://0.0.0.0:5672";
 
     public static void main(String[] args) throws Exception
